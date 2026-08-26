@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0b1f4d"/>
+      <stop offset="1" stop-color="#163b72"/>
+    </linearGradient>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#15803d"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#c2410c"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 42px Arial, sans-serif; fill: #ffffff; }
+      .subtitle { font: 400 21px Arial, sans-serif; fill: #dbeafe; }
+      .section { font: 700 25px Arial, sans-serif; fill: #0f172a; }
+      .box-title { font: 700 20px Arial, sans-serif; fill: #0f172a; }
+      .body { font: 400 16px Arial, sans-serif; fill: #334155; }
+      .small { font: 400 14px Arial, sans-serif; fill: #475569; }
+      .label { font: 700 14px Arial, sans-serif; fill: #ffffff; }
+      .metric { font: 700 20px Arial, sans-serif; fill: #0f172a; }
+      .metric-label { font: 400 14px Arial, sans-serif; fill: #475569; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1100" fill="#f8fafc"/>
+  <rect width="1600" height="135" fill="url(#header)"/>
+  <text x="800" y="58" text-anchor="middle" class="title">THUẬT TOÁN ĐỀ XUẤT: CỬA SỔ TẦM HOẠT ĐỘNG + BACKFILL</text>
+  <text x="800" y="98" text-anchor="middle" class="subtitle">Không chọn cố định 36 trạm cho toàn tuyến; xác minh dần cho đến khi chứng minh được chuỗi an toàn</text>
+
+  <!-- Comparison -->
+  <rect x="55" y="160" width="710" height="112" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <rect x="78" y="181" width="112" height="32" rx="16" fill="#c2410c"/>
+  <text x="134" y="203" text-anchor="middle" class="label">HIỆN TẠI</text>
+  <text x="215" y="202" class="box-title">1.575 ứng viên → lấy 36 → đọc connector → còn 24</text>
+  <text x="78" y="238" class="body">Ứng viên hỏng không được thay thế, tạo khoảng trống giả giữa các vùng dù dữ liệu thô vẫn còn nhiều trạm.</text>
+
+  <rect x="835" y="160" width="710" height="112" rx="14" fill="#ecfdf5" stroke="#16a34a" stroke-width="2"/>
+  <rect x="858" y="181" width="112" height="32" rx="16" fill="#15803d"/>
+  <text x="914" y="203" text-anchor="middle" class="label">ĐỀ XUẤT</text>
+  <text x="995" y="202" class="box-title">Tìm theo vùng xe thực sự tới được</text>
+  <text x="858" y="238" class="body">Đọc chi tiết theo batch; nếu không đạt CCS2 thì backfill ngay trong vùng trước khi chuyển sang chặng tiếp theo.</text>
+
+  <text x="55" y="318" class="section">Luồng xử lý đề xuất</text>
+
+  <!-- Main flow row 1 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="345" width="245" height="142" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="88" cy="378" r="20" fill="#2563eb"/>
+    <text x="88" y="385" text-anchor="middle" class="label">1</text>
+    <text x="120" y="383" class="box-title">Đầu vào</text>
+    <text x="78" y="420" class="body">• Route Goong</text>
+    <text x="78" y="446" class="body">• Xe, SOC, reserve 15%</text>
+    <text x="78" y="472" class="body">• Thời tiết và tải trọng</text>
+  </g>
+
+  <path d="M300 416 H340" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="350" y="345" width="275" height="142" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="383" cy="378" r="20" fill="#2563eb"/>
+    <text x="383" y="385" text-anchor="middle" class="label">2</text>
+    <text x="415" y="383" class="box-title">Tính tầm an toàn</text>
+    <text x="373" y="420" class="body">Chặng đầu: SOC hiện tại − 15%</text>
+    <text x="373" y="446" class="body">Sau sạc: SOC rời trạm − 15%</text>
+    <text x="373" y="472" class="small">VF3 dry-run: 5,93 km / 168,11 km</text>
+  </g>
+
+  <path d="M625 416 H665" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="675" y="345" width="285" height="142" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="708" cy="378" r="20" fill="#2563eb"/>
+    <text x="708" y="385" text-anchor="middle" class="label">3</text>
+    <text x="740" y="383" class="box-title">Mở cửa sổ tiếp cận</text>
+    <text x="698" y="420" class="body">Chỉ xét trạm nằm trong vùng</text>
+    <text x="698" y="446" class="body">mà xe có thể tới vẫn giữ reserve.</text>
+    <text x="698" y="472" class="small">Ưu tiên tiến về đích, ít đường vòng</text>
+  </g>
+
+  <path d="M960 416 H1000" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="1010" y="345" width="250" height="142" rx="14" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <circle cx="1043" cy="378" r="20" fill="#7c3aed"/>
+    <text x="1043" y="385" text-anchor="middle" class="label">4</text>
+    <text x="1075" y="383" class="box-title">Đọc batch nhỏ</text>
+    <text x="1033" y="420" class="body">8 ứng viên mỗi batch</text>
+    <text x="1033" y="446" class="body">Gọi VinFast detail endpoint</text>
+    <text x="1033" y="472" class="small">Không cần đọc toàn bộ 5.412 trạm</text>
+  </g>
+
+  <path d="M1260 416 H1300" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="1310" y="345" width="235" height="142" rx="14" fill="#ecfdf5" stroke="#16a34a" stroke-width="2"/>
+    <circle cx="1343" cy="378" r="20" fill="#16a34a"/>
+    <text x="1343" y="385" text-anchor="middle" class="label">5</text>
+    <text x="1375" y="383" class="box-title">Xác minh trạm</text>
+    <text x="1333" y="420" class="body">• CCS2 và công suất</text>
+    <text x="1333" y="446" class="body">• ACTIVE / BUSY</text>
+    <text x="1333" y="472" class="body">• Public và provenance</text>
+  </g>
+
+  <!-- Decision and loops -->
+  <path d="M1428 487 V525" stroke="#15803d" stroke-width="4" marker-end="url(#arrow-green)"/>
+  <polygon points="1428,535 1530,600 1428,665 1326,600" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+  <text x="1428" y="585" text-anchor="middle" class="box-title">Đủ trạm hợp lệ</text>
+  <text x="1428" y="612" text-anchor="middle" class="body">để phủ cửa sổ?</text>
+
+  <path d="M1326 600 H1195 V535 H1135" fill="none" stroke="#c2410c" stroke-width="4" marker-end="url(#arrow-orange)"/>
+  <rect x="985" y="512" width="150" height="48" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="1060" y="542" text-anchor="middle" class="box-title" fill="#9a3412">NO: backfill</text>
+  <text x="1206" y="586" class="small" fill="#9a3412">Lấy batch kế tiếp cùng vùng</text>
+
+  <path d="M1428 665 V705 H1195" fill="none" stroke="#15803d" stroke-width="4" marker-end="url(#arrow-green)"/>
+  <text x="1450" y="692" class="small" fill="#166534">YES</text>
+
+  <!-- Main flow row 2 -->
+  <g filter="url(#shadow)">
+    <rect x="930" y="680" width="265" height="132" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="963" cy="713" r="20" fill="#2563eb"/>
+    <text x="963" y="720" text-anchor="middle" class="label">6</text>
+    <text x="995" y="718" class="box-title">Dựng đồ thị reachability</text>
+    <text x="953" y="754" class="body">Nút = trạm đã xác minh</text>
+    <text x="953" y="780" class="body">Cạnh = chặng giữ SOC ≥ 15%</text>
+  </g>
+
+  <path d="M930 746 H885" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="620" y="680" width="265" height="132" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="653" cy="713" r="20" fill="#2563eb"/>
+    <text x="653" y="720" text-anchor="middle" class="label">7</text>
+    <text x="685" y="718" class="box-title">Goong route thực</text>
+    <text x="643" y="754" class="body">Xác minh distance và legs thật.</text>
+    <text x="643" y="780" class="body">Sai → loại cạnh, tìm đường khác.</text>
+  </g>
+
+  <path d="M620 746 H575" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="310" y="680" width="265" height="132" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="343" cy="713" r="20" fill="#2563eb"/>
+    <text x="343" y="720" text-anchor="middle" class="label">8</text>
+    <text x="375" y="718" class="box-title">Mô phỏng SOC</text>
+    <text x="333" y="754" class="body">Tính SOC đến/rời từng trạm.</text>
+    <text x="333" y="780" class="body">Thiếu phủ → mở rộng/fallback.</text>
+  </g>
+
+  <path d="M310 746 H265" stroke="#15803d" stroke-width="4" marker-end="url(#arrow-green)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="55" y="680" width="210" height="132" rx="14" fill="#ecfdf5" stroke="#16a34a" stroke-width="3"/>
+    <circle cx="88" cy="713" r="20" fill="#16a34a"/>
+    <text x="88" y="720" text-anchor="middle" class="label">9</text>
+    <text x="120" y="718" class="box-title">Kết quả</text>
+    <text x="78" y="754" class="body">Tối đa 3 kế hoạch tốt nhất</text>
+    <text x="78" y="780" class="body">kèm log độ phủ và lý do.</text>
+  </g>
+
+  <!-- Escalation note -->
+  <rect x="1230" y="700" width="315" height="112" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="1255" y="735" class="box-title">Nếu vẫn không đủ độ phủ</text>
+  <text x="1255" y="768" class="body">1. Mở hành lang 5 → 10 → 20 km</text>
+  <text x="1255" y="794" class="body">2. Bổ sung fallback, không thay dữ liệu chính</text>
+
+  <!-- Dry-run route -->
+  <text x="55" y="862" class="section">Dry-run Bách Khoa Hà Nội → Quận 8 TP.HCM, VF3, SOC 18%</text>
+  <rect x="55" y="885" width="1490" height="165" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <line x1="145" y1="950" x2="1455" y2="950" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+
+  <circle cx="145" cy="950" r="23" fill="#0f172a"/>
+  <text x="145" y="956" text-anchor="middle" class="label">HN</text>
+  <circle cx="245" cy="950" r="13" fill="#16a34a"/><circle cx="340" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="435" cy="950" r="13" fill="#16a34a"/><circle cx="530" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="625" cy="950" r="13" fill="#16a34a"/><circle cx="720" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="815" cy="950" r="13" fill="#16a34a"/><circle cx="910" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="1005" cy="950" r="13" fill="#16a34a"/><circle cx="1100" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="1195" cy="950" r="13" fill="#16a34a"/><circle cx="1290" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="1385" cy="950" r="13" fill="#16a34a"/>
+  <circle cx="1455" cy="950" r="23" fill="#0f172a"/>
+  <text x="1455" y="956" text-anchor="middle" class="label">HCM</text>
+
+  <text x="145" y="918" text-anchor="middle" class="small">SOC 18%</text>
+  <text x="1455" y="918" text-anchor="middle" class="small">SOC 31,6%</text>
+  <text x="245" y="988" text-anchor="middle" class="small">Hà Nội</text>
+  <text x="435" y="988" text-anchor="middle" class="small">Nghệ An</text>
+  <text x="625" y="988" text-anchor="middle" class="small">Quảng Bình</text>
+  <text x="815" y="988" text-anchor="middle" class="small">Quảng Ngãi</text>
+  <text x="1005" y="988" text-anchor="middle" class="small">Phú Yên</text>
+  <text x="1195" y="988" text-anchor="middle" class="small">Bình Thuận</text>
+  <text x="1385" y="988" text-anchor="middle" class="small">Đồng Nai</text>
+
+  <rect x="300" y="1010" width="225" height="28" rx="14" fill="#eff6ff"/>
+  <text x="412" y="1030" text-anchor="middle" class="small">13 trạm · 14 legs Goong</text>
+  <rect x="550" y="1010" width="225" height="28" rx="14" fill="#ecfdf5"/>
+  <text x="662" y="1030" text-anchor="middle" class="small">SOC thấp nhất 16,8%</text>
+  <rect x="800" y="1010" width="225" height="28" rx="14" fill="#fff7ed"/>
+  <text x="912" y="1030" text-anchor="middle" class="small">112 detail / 5.412 ứng viên</text>
+  <rect x="1050" y="1010" width="225" height="28" rx="14" fill="#f5f3ff"/>
+  <text x="1162" y="1030" text-anchor="middle" class="small">Không có chặng unreachable</text>
+
+  <text x="800" y="1080" text-anchor="middle" class="small">Mục tiêu: giới hạn là ngân sách tăng dần, không phải cắt cứng danh sách trước khi biết connector và khả năng tiếp cận.</text>
+</svg>

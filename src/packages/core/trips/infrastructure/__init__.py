@@ -1,0 +1,1 @@
+"""Trips infrastructure adapters."""

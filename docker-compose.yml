@@ -1,0 +1,36 @@
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v26.6.5-debian
+    profiles: ["routing"]
+    command:
+      - osrm-routed
+      - --algorithm
+      - mld
+      - --mmap
+      - --max-table-size
+      - "100"
+      - /data/vietnam-routing.osrm
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./data/osrm:/data:ro
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      OSRM_BASE_URL: http://osrm:5000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

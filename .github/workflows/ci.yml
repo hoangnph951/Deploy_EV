@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_call:
+    inputs:
+      selective:
+        description: Run only the component checks selected by the caller
+        required: false
+        type: boolean
+        default: false
+      run_backend:
+        description: Run Python lint and tests
+        required: false
+        type: boolean
+        default: true
+      run_frontend:
+        description: Run frontend type checking and build
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  backend:
+    name: Backend lint and tests
+    if: ${{ !inputs.selective || inputs.run_backend }}
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        env:
+          APP_ENV: test
+          OPENAI_API_KEY: test-key
+
+  frontend:
+    name: Frontend typecheck and build
+    if: ${{ !inputs.selective || inputs.run_frontend }}
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        working-directory: src/apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck and build frontend
+        run: npm run build

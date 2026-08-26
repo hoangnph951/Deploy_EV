@@ -1,0 +1,115 @@
+{
+	"version": "f3-f4-sim-config-v1",
+	"description": "F3/F4 simulations are derived only from successful F1 proposals.",
+	"defaults": {
+		"source_type": "SIMULATED",
+		"source_name": "F3/F4 Telemetry Simulator",
+		"tick_interval_seconds": 30,
+		"ticks": 20,
+		"speed_multiplier": 10,
+		"seed": 210,
+		"required_proposal_status": "SUCCESSFUL",
+		"required_plan_status": "CONFIRMED",
+		"base_case_invariant": "Every generated case must resolve to a successful and feasible F1 proposal before simulation starts.",
+		"default_profiles": [
+			"NORMAL",
+			"ROUTE_DEVIATION",
+			"SOC_UNDERPERFORMANCE",
+			"STATION_UNAVAILABLE",
+			"STALE_TELEMETRY"
+		],
+		"optional_outcome_profiles": ["NO_FEASIBLE_ALTERNATIVE"]
+	},
+	"case_matrix": {
+		"case_count": 15,
+		"soc_levels_percent": [17, 42, 60],
+		"case_id_format": "{route_id}_SOC{soc_percent}"
+	},
+	"routes": [
+		{
+			"route_id": "HUST_HUU_NGHI",
+			"origin": "Đại học Bách khoa Hà Nội",
+			"destination": "phường Hữu Nghị, Hòa Bình, Phú Thọ",
+			"proposal_selector": {"status": "SUCCESSFUL", "plan_status": "CONFIRMED"}
+		},
+		{
+			"route_id": "VINUNI_HCM",
+			"origin": "Đại học VinUni",
+			"destination": "thành phố Hồ Chí Minh",
+			"proposal_selector": {"status": "SUCCESSFUL", "plan_status": "CONFIRMED"}
+		},
+		{
+			"route_id": "AN_KHANH_TIME_CITY",
+			"origin": "An Khánh",
+			"destination": "Time City",
+			"proposal_selector": {"status": "SUCCESSFUL", "plan_status": "CONFIRMED"}
+		},
+		{
+			"route_id": "LUNG_CU_CA_MAU",
+			"origin": "Lũng Cú, Hà Giang",
+			"destination": "Cà Mau",
+			"proposal_selector": {"status": "SUCCESSFUL", "plan_status": "CONFIRMED"}
+		},
+		{
+			"route_id": "MOET_NGHE_AN",
+			"origin": "Bộ Giáo dục và Đào tạo, Hà Nội",
+			"destination": "Nghệ An",
+			"proposal_selector": {"status": "SUCCESSFUL", "plan_status": "CONFIRMED"}
+		}
+	],
+	"profiles": {
+		"NORMAL": {
+			"mutation": "NONE",
+			"expected_monitoring_events": 0
+		},
+		"ROUTE_DEVIATION": {
+			"mutation": {
+				"type": "ROUTE_OFFSET_KM",
+				"offsets_km_by_tick": {"9": 1.99, "10": 2.01, "11": 2.5, "12": 2.5},
+				"recovery_tick": 17
+			},
+			"expected_trigger": "ROUTE_DEVIATION",
+			"expected_replan": true
+		},
+		"SOC_UNDERPERFORMANCE": {
+			"mutation": {
+				"type": "SOC_DELTA_PERCENT",
+				"delta_percent_by_tick": {"9": 4.9, "10": 5.1, "11": 6.0, "12": 7.0},
+				"recovery_tick": 17
+			},
+			"expected_trigger": "SOC_UNDERPERFORMANCE",
+			"expected_replan": true
+		},
+		"STATION_UNAVAILABLE": {
+			"mutation": {
+				"type": "DISABLE_PROPOSED_STATION",
+				"target": "FIRST_CHARGING_STOP",
+				"trigger_tick": 10,
+				"duration_ticks": 6,
+				"emit_once": true
+			},
+			"expected_trigger": "SIMULATED_STATION_UNAVAILABLE",
+			"expected_replan": true
+		},
+		"STALE_TELEMETRY": {
+			"mutation": {
+				"type": "TIMESTAMP_AGE_SECONDS",
+				"ages_by_tick": {"0": 29, "1": 60, "2": 61, "3": 90}
+			},
+			"expected_trigger": "STALE_TELEMETRY",
+			"expected_replan": false
+		},
+		"NO_FEASIBLE_ALTERNATIVE": {
+			"description": "Optional F4 negative outcome derived from a successful confirmed case; never a base case.",
+			"mutation": {
+				"type": "DISABLE_ALL_ALTERNATIVE_STATIONS",
+				"start_tick": 10,
+				"preserve_confirmed_plan": true,
+				"force_soc_delta_percent": 8.0
+			},
+			"expected_trigger": "NEXT_STATION_UNREACHABLE",
+			"expected_replan_result": "INFEASIBLE",
+			"expected_reason": "ALL_STATIONS_UNAVAILABLE"
+		}
+	}
+}

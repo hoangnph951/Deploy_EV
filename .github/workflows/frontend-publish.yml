@@ -1,0 +1,59 @@
+name: Build and Push Frontend Image
+
+on:
+  push:
+    branches:
+      - feature/track-route
+    paths:
+      - "src/apps/web/**"
+      - ".github/workflows/frontend-publish.yml"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ai20k-build-phase-cohort-3/p-210-web
+
+jobs:
+  ci:
+    name: Frontend CI
+    uses: ./.github/workflows/ci.yml
+    with:
+      selective: true
+      run_backend: false
+      run_frontend: true
+
+  build-and-push:
+    needs: ci
+    runs-on: self-hosted
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src/apps/web
+          file: ./src/apps/web/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=https://p-210-dev.onrender.com
+            VITE_GOONG_MAPTILES_KEY=${{ secrets.VITE_GOONG_MAPTILES_KEY }}
+          tags: |
+            ghcr.io/ai20k-build-phase-cohort-3/p-210-web:dev
+            ghcr.io/ai20k-build-phase-cohort-3/p-210-web:${{ github.sha }}
+      - name: Trigger frontend Render deploy
+        run: |
+          curl --fail --show-error \
+            -X POST \
+            "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK_URL }}"

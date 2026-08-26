@@ -1,0 +1,10 @@
+[project]
+name = "team-alpha-agent"          # Tên dự án của bạn
+version = "0.1.0"
+description = "AI Agent cho [mô tả use case]"  # Mô tả ngắn gọn
+authors = [
+    {name = "Team Alpha"},
+]
+
+[project.urls]
+repository = "https://github.com/AI20K-Build-Phase-Cohort-3/P-XXX"  # URL repo của đội

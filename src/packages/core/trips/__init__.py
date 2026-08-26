@@ -1,0 +1,1 @@
+"""Trips domain package."""

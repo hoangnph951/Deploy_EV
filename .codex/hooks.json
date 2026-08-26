@@ -1,0 +1,33 @@
+{
+  "description": "AI20K realtime Codex prompt and stop event logging.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "name": "log-prompt",
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/_pyrun.sh\" \"$(git rev-parse --show-toplevel)/scripts/log_hook.py\" --tool=codex",
+            "commandWindows": "\"C:\\Program Files\\Git\\bin\\bash.exe\" \"$(git rev-parse --show-toplevel)/scripts/_pyrun.sh\" \"$(git rev-parse --show-toplevel)/scripts/log_hook.py\" --tool=codex",
+            "timeout": 10,
+            "statusMessage": "Logging prompt"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "name": "log-stop",
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/_pyrun.sh\" \"$(git rev-parse --show-toplevel)/scripts/log_hook.py\" --tool=codex",
+            "commandWindows": "\"C:\\Program Files\\Git\\bin\\bash.exe\" \"$(git rev-parse --show-toplevel)/scripts/_pyrun.sh\" \"$(git rev-parse --show-toplevel)/scripts/log_hook.py\" --tool=codex",
+            "timeout": 10,
+            "statusMessage": "Logging stop event"
+          }
+        ]
+      }
+    ]
+  }
+}
