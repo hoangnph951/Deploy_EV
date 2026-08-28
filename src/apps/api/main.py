@@ -14,9 +14,10 @@ from src.apps.api.bootstrap.config import get_settings
 from src.apps.api.bootstrap.logging import configure_logging
 from src.apps.api.routes.auth import router as auth_router
 from src.apps.api.routes.chat import router as chat_router
-from src.apps.api.routes.monitoring import router as monitoring_router
 from src.apps.api.routes.places import router as places_router
+from src.apps.api.routes.monitoring import router as monitoring_router
 from src.apps.api.routes.simulation import router as simulation_router
+from src.apps.api.routes.replanning import router as replanning_router
 from src.apps.api.routes.trips import router as trips_router
 from src.packages.core.trips.application.errors import AppError
 
@@ -52,8 +53,9 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(places_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
-app.include_router(trips_router, prefix="/api/v1")
 app.include_router(simulation_router, prefix="/api/v1")
+app.include_router(replanning_router, prefix="/api/v1")
+app.include_router(trips_router, prefix="/api/v1")
 
 
 @app.middleware("http")

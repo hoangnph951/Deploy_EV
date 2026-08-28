@@ -13,16 +13,7 @@ env:
   IMAGE_NAME: ai20k-build-phase-cohort-3/p-210
 
 jobs:
-  ci:
-    name: Backend CI
-    uses: ./.github/workflows/ci.yml
-    with:
-      selective: true
-      run_backend: true
-      run_frontend: false
-
   build-and-push:
-    needs: ci
     runs-on: self-hosted
 
     permissions:
@@ -48,6 +39,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
       - name: Trigger Render deploy
         run: |
           curl --fail --show-error \

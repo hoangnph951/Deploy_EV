@@ -49,3 +49,14 @@
 ---
 
 <!-- Format: copy block trên cho mỗi ngày làm việc -->
+
+## [2026-08-28]
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Nguyễn Ngọc Ánh | Khép kín lifecycle F1–F4 | ✅ Done | F2 confirmation bắt buộc trước F3; F4 candidate tiếp tục ở trạng thái chờ xác nhận | — |
+| Nguyễn Ngọc Ánh | Nâng cấp F4 diagnostic loop | ✅ Done | Chuỗi kiểm tra typed nhiều bước, reflection audit, OpenAI structured reflection/action và deterministic fallback | — |
+| Nguyễn Ngọc Ánh | Tự động nối canonical event F3 sang F4 | ✅ Done | Auto-submit một lần theo event ID, có retry khi lỗi; bỏ nút “Lập proposal mới” | — |
+| Nguyễn Ngọc Ánh | Việt hóa Feature 4 | ✅ Done | Nhật ký tình huống, bằng chứng, kết luận và hành động bằng thuật ngữ dễ hiểu | — |
+
+**Bằng chứng kiểm thử:** backend `142 passed, 5 xfailed`; frontend `5 passed`; TypeScript và Vite production build thành công.

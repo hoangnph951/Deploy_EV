@@ -126,6 +126,9 @@ def test_stale_telemetry_requires_a_fresh_sample_before_resuming():
     assert refreshed.current_tick == stale_tick + 1
     assert refreshed.telemetry is not None
     assert refreshed.telemetry.age_seconds == 0
+    assert refreshed.route_polyline == run.route_polyline
+    assert refreshed.replanned_plan is None
+    assert refreshed.applied_action is None
 
 
 def test_station_replan_uses_f1_result_and_exposes_replacement_stations():

@@ -15,8 +15,38 @@ const PROFILE_LABELS: Record<string, string> = {
   ROUTE_DEVIATION: "Lệch tuyến",
   SOC_UNDERPERFORMANCE: "SOC thấp hơn dự kiến",
   STATION_UNAVAILABLE: "Trạm không khả dụng",
-  STALE_TELEMETRY: "Telemetry quá cũ",
+  STALE_TELEMETRY: "Dữ liệu xe đã cũ",
   NO_FEASIBLE_ALTERNATIVE: "Không còn phương án an toàn",
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  ROUTE_DEVIATION: "Xe lệch khỏi lộ trình",
+  SOC_UNDERPERFORMANCE: "Mức pin thấp hơn dự kiến",
+  STATION_UNAVAILABLE: "Trạm sạc không khả dụng",
+  STALE_TELEMETRY: "Dữ liệu GPS và mức pin đã cũ",
+};
+
+const INTENT_LABELS: Record<string, string> = {
+  ROUTE_RECOVERY: "Khôi phục lộ trình",
+  ENERGY_RESCUE: "Bảo đảm an toàn năng lượng",
+  STATION_SUBSTITUTION: "Tìm trạm sạc thay thế",
+  TELEMETRY_RECOVERY: "Cập nhật dữ liệu xe",
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  request_telemetry_refresh: "Yêu cầu GPS và mức pin mới",
+  route_from_current_position: "Tính tuyến từ vị trí hiện tại",
+  nearest_station_reachability: "Kiểm tra khả năng đến trạm gần nhất",
+  station_search: "Tìm trạm sạc phù hợp",
+  energy_simulation: "Tính mức tiêu thụ và pin dự phòng",
+  feasibility_check: "Kiểm tra tính khả thi và an toàn",
+  compare_plans: "So sánh với lộ trình hiện tại",
+};
+
+type PublicTraceStep = {
+  title: string;
+  detail: string;
+  tone?: "warning" | "success";
 };
 
 type Props = {
@@ -39,6 +69,9 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
   const [speed, setSpeed] = useState(10);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [visibleTraceSteps, setVisibleTraceSteps] = useState(0);
+  const [pendingAction, setPendingAction] = useState<"replan" | "refresh-telemetry" | null>(null);
+  const [actionNotice, setActionNotice] = useState("");
 
   function updateRun(nextRun: SimulationRun) {
     onRunChange(
@@ -129,14 +162,89 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
   const progress = run ? Math.round(((run.current_tick + 1) / run.total_ticks) * 100) : 0;
   const awaitingAction = run?.status === "AWAITING_ACTION";
   const noFeasibleReplan = latestDecision?.action === "NO_FEASIBLE_PLAN_REQUEST_ASSISTANCE";
+  const telemetryRecoveryDecision = latestDecision?.action === "REQUEST_NEW_TELEMETRY";
+  const staleTelemetry = Boolean(awaitingAction && telemetryRecoveryDecision);
   const userActionLabel = latestDecision?.action === "REQUEST_NEW_TELEMETRY"
-    ? "Yêu cầu telemetry mới"
+    ? "Yêu cầu dữ liệu xe mới"
     : "Lập lại kế hoạch";
+  const eventLabel = latestEvent ? EVENT_LABELS[latestEvent.event_type] ?? latestEvent.event_type : "Chưa có cảnh báo";
+  const decisionSummary = telemetryRecoveryDecision
+    ? staleTelemetry
+      ? "Dữ liệu GPS và mức pin đã quá hạn. Trợ lý dừng việc tính tuyến và đề nghị lấy dữ liệu xe mới."
+      : "GPS và mức pin mới đã được tiếp nhận. Xe tiếp tục lộ trình hiện tại mà không tạo tuyến thay thế."
+    : noFeasibleReplan
+      ? "Chưa chứng minh được một lộ trình thay thế an toàn. Cần hỗ trợ vận hành trước khi tiếp tục."
+      : latestDecision?.intent === "ROUTE_RECOVERY"
+      ? "Xe đã lệch khỏi lộ trình. Trợ lý đề nghị tính lại tuyến từ vị trí và mức pin hiện tại."
+      : latestDecision?.intent === "ENERGY_RESCUE"
+        ? "Mức pin thực tế thấp hơn dự kiến. Trợ lý ưu tiên kiểm tra khả năng đến trạm sạc an toàn."
+        : latestDecision?.intent === "STATION_SUBSTITUTION"
+          ? "Trạm sạc dự kiến không còn khả dụng. Trợ lý đề nghị tìm trạm thay thế và so sánh lộ trình."
+          : "Trợ lý đã kiểm tra dữ liệu hiện tại và chuẩn bị hành động phù hợp.";
+  const publicTrace = useMemo<PublicTraceStep[]>(() => {
+    if (!latestDecision || !latestEvent) return [];
+    const steps: PublicTraceStep[] = [
+      {
+        title: "Đã tiếp nhận cảnh báo",
+        detail: `${EVENT_LABELS[latestEvent.event_type] ?? latestEvent.event_type} tại vị trí ${telemetry?.lat.toFixed(4) ?? "—"}, ${telemetry?.lng.toFixed(4) ?? "—"}.`,
+      },
+      {
+        title: "Đã kiểm tra dữ liệu đầu vào",
+        detail: telemetryRecoveryDecision
+          ? "Mẫu GPS và mức pin gây cảnh báo đã cũ hơn 60 giây, không đủ điều kiện để tính lại lộ trình."
+          : `GPS và mức pin còn hiệu lực; SOC hiện tại là ${actualSoc.toFixed(1)}%.`,
+        tone: telemetryRecoveryDecision ? "warning" : "success",
+      },
+      ...latestDecision.selected_tools.map((tool) => ({
+        title: TOOL_LABELS[tool] ?? "Thực hiện bước kiểm tra nghiệp vụ",
+        detail: tool === "request_telemetry_refresh"
+          ? "Chỉ yêu cầu một mẫu GPS/SOC mới; không tạo tuyến thay thế từ dữ liệu cũ."
+          : "Kết quả của bước này được đưa vào kiểm tra an toàn trước khi đề xuất.",
+      })),
+      {
+        title: "Đã kiểm tra quy tắc an toàn",
+        detail: telemetryRecoveryDecision
+          ? "Đã chặn mọi thao tác lập lại kế hoạch cho đến khi có GPS và mức pin mới."
+          : latestDecision.action_guard === "PASSED"
+            ? "Đề xuất đáp ứng các điều kiện an toàn và vẫn cần người dùng xác nhận."
+            : "Đề xuất tự động đã bị chặn; hệ thống chuyển sang phương án thận trọng.",
+        tone: latestDecision.action_guard === "PASSED" && !telemetryRecoveryDecision ? "success" : "warning",
+      },
+      {
+        title: "Hành động đề xuất",
+        detail: telemetryRecoveryDecision
+          ? staleTelemetry
+            ? "Yêu cầu dữ liệu xe mới. Khi nhận được GPS/SOC hợp lệ, xe tiếp tục lộ trình hiện tại."
+            : "Đã nhận dữ liệu xe mới và tiếp tục lộ trình hiện tại."
+          : "Chờ người dùng xác nhận trước khi lập và áp dụng lộ trình thay thế.",
+      },
+    ];
+    return steps;
+  }, [actualSoc, latestDecision, latestEvent, staleTelemetry, telemetry, telemetryRecoveryDecision]);
+
+  useEffect(() => {
+    if (!latestDecision) {
+      setVisibleTraceSteps(0);
+      return;
+    }
+    setVisibleTraceSteps(1);
+    const timer = window.setInterval(() => {
+      setVisibleTraceSteps((current) => {
+        if (current >= publicTrace.length) {
+          window.clearInterval(timer);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 420);
+    return () => window.clearInterval(timer);
+  }, [latestDecision?.agent_run_id, publicTrace.length]);
 
   async function begin() {
     if (!selectedCase) return;
     setBusy(true);
     setError("");
+    setActionNotice("");
     try {
       updateRun(await startSimulationCase(selectedCase.case_id, speed));
     } catch (reason) {
@@ -171,12 +279,24 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
     setBusy(true);
     setError("");
     try {
-      updateRun(await controlSimulation(run.run_id, operation));
+      const nextRun = await controlSimulation(run.run_id, operation);
+      updateRun(nextRun);
+      if (operation === "refresh-telemetry") {
+        setActionNotice("Đã nhận GPS và mức pin mới. Xe đang tiếp tục lộ trình hiện tại.");
+      } else if (operation === "replan") {
+        setActionNotice("Đã lập lại kế hoạch từ vị trí hiện tại và tiếp tục sau xác nhận của bạn.");
+      }
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
+  }
+
+  function requestAction() {
+    if (!latestDecision || noFeasibleReplan) return;
+    setPendingAction(latestDecision.action === "REQUEST_NEW_TELEMETRY" ? "refresh-telemetry" : "replan");
   }
 
   return (
@@ -185,7 +305,7 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
         <div>
           <p className="tracking-kicker">GIÁM SÁT CHUYẾN ĐI</p>
           <h1>Theo dõi lộ trình</h1>
-          <p>Telemetry mô phỏng · phát hiện sự kiện · AI Agent phân tích và đề xuất xử lý</p>
+          <p>Dữ liệu xe mô phỏng · phát hiện sự kiện · trợ lý phân tích và đề xuất xử lý</p>
         </div>
         <div className="tracking-run-summary">
           <div className="tracking-run-status">
@@ -206,14 +326,14 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
           <div className="tracking-incident-icon">!</div>
           <div>
             <p>PHÁT HIỆN SỰ CỐ · XE ĐÃ TẠM DỪNG</p>
-            <h2>{latestEvent.event_type.replace(/_/g, " ")}</h2>
-            <span>{latestDecision.explanation}</span>
+            <h2>{eventLabel}</h2>
+            <span>{decisionSummary}</span>
             <small>Giá trị {latestEvent.actual_value ?? "—"} · Ngưỡng {latestEvent.threshold_value ?? "—"} · Tick {latestEvent.tick}</small>
           </div>
           <button
             type="button"
             disabled={busy || noFeasibleReplan}
-            onClick={() => { void control(latestDecision.action === "REQUEST_NEW_TELEMETRY" ? "refresh-telemetry" : "replan"); }}
+            onClick={requestAction}
           >
             {noFeasibleReplan ? "Không có phương án an toàn" : userActionLabel}
           </button>
@@ -289,7 +409,7 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
             </div>
           </article>
           <article className="tracking-soc-card">
-            <div className="tracking-card-label">SOC hiện tại <span>● {telemetry ? "Dữ liệu mới" : "Chờ telemetry"}</span></div>
+            <div className="tracking-card-label">SOC hiện tại <span>● {telemetry ? (telemetry.age_seconds > 60 ? "Dữ liệu cũ" : "Dữ liệu mới") : "Chờ dữ liệu"}</span></div>
             <strong>{actualSoc.toFixed(0)}%</strong>
             <div className="soc-bar"><span style={{ width: `${Math.max(0, Math.min(100, actualSoc))}%` }} /></div>
             <div className="tracking-soc-meta"><span>Dự kiến {expectedSoc.toFixed(0)}%</span><b className={delta < 0 ? "negative" : "positive"}>{delta > 0 ? "+" : ""}{delta.toFixed(1)}%</b></div>
@@ -319,34 +439,67 @@ export function TrackingWorkspace({ plan, origin, destination, initialSoc, run, 
         <aside className="tracking-insights">
           <article className="tracking-status-card">
             <p className="tracking-card-label">TRẠNG THÁI CHUYẾN ĐI</p>
-            <h2><span className="status-check">{awaitingAction ? "!" : "✓"}</span>{awaitingAction ? "Đang chờ bạn xử lý" : run?.applied_action ? "Đang chạy theo plan mới" : "Đang bám sát kế hoạch"}</h2>
-            <p>{awaitingAction && latestEvent ? latestEvent.event_type.replace(/_/g, " ") : run?.applied_action ? "Candidate plan đã được áp dụng sau xác nhận của người dùng." : "Chưa phát hiện rủi ro cần tái lập kế hoạch."}</p>
+            <h2><span className="status-check">{awaitingAction ? "!" : "✓"}</span>{awaitingAction ? "Đang chờ bạn xử lý" : run?.applied_action ? "Đang chạy theo lộ trình mới" : "Đang bám sát kế hoạch"}</h2>
+            <p>{awaitingAction && latestEvent ? eventLabel : actionNotice || (run?.applied_action ? "Lộ trình mới đã được áp dụng sau xác nhận của bạn." : "Chưa phát hiện rủi ro cần lập lại kế hoạch.")}</p>
           </article>
           {plan && !run ? <SocChart plan={plan} initialSoc={initialSoc} /> : (
             <article className="tracking-empty-card"><strong>SOC thực tế / dự kiến</strong><p>{telemetry ? `${actualSoc.toFixed(1)}% / ${expectedSoc.toFixed(1)}% tại ${telemetry.progress_percent}% hành trình.` : "Bắt đầu mô phỏng để xem diễn biến SOC."}</p></article>
           )}
           <article className={`tracking-next-card ${latestEvent ? "has-alert" : ""}`}>
             <p className="tracking-card-label">SỰ KIỆN GẦN NHẤT</p>
-            {latestEvent ? <><strong>{latestEvent.event_type.replace(/_/g, " ")}</strong><span>{latestEvent.actual_value ?? "—"} · ngưỡng {latestEvent.threshold_value ?? "—"}</span></> : <><strong>Không có cảnh báo</strong><span>Tiếp tục theo kế hoạch hiện tại</span></>}
+            {latestEvent ? <><strong>{eventLabel}</strong><span>{latestEvent.actual_value ?? "—"} · ngưỡng {latestEvent.threshold_value ?? "—"}</span></> : <><strong>Không có cảnh báo</strong><span>Tiếp tục theo kế hoạch hiện tại</span></>}
           </article>
-          <article className="tracking-ai-card">
-            <div className="ai-card-heading"><span className="ai-spark">✦</span><div><p className="tracking-card-label">AI AGENT 1 · REPLANNING SUPERVISOR</p><h2>{latestDecision ? "Supervisor đã phân tích xong" : "Supervisor đang chờ sự kiện"}</h2></div></div>
+          <article className={`tracking-ai-card ${staleTelemetry ? "has-stale-data" : ""}`}>
+            <div className="ai-card-heading"><span className="ai-spark">✦</span><div><p className="tracking-card-label">TRỢ LÝ ĐIỀU PHỐI HÀNH TRÌNH</p><h2>{latestDecision ? (visibleTraceSteps < publicTrace.length ? "Đang hiển thị quá trình phân tích" : "Đã hoàn tất phân tích") : "Đang chờ sự kiện"}</h2></div><span className={`ai-live-state ${latestDecision ? "is-active" : ""}`}>{latestDecision ? "TRỰC TIẾP" : "SẴN SÀNG"}</span></div>
             {latestDecision ? <>
-              <div className="ai-intent">{latestDecision.intent}</div>
-              <div className="ai-source">{latestDecision.classification_source === "AI_AGENT" ? "OpenAI đã chọn hướng xử lý" : "Fallback policy đang điều phối"} · confidence {(latestDecision.intent_confidence * 100).toFixed(0)}%</div>
-              <p>{latestDecision.explanation}</p>
-              <dl className="tracking-agent-trace">
-                <div><dt>Chiến lược</dt><dd>{latestDecision.strategy}</dd></div>
-                <div><dt>Tools</dt><dd>{latestDecision.selected_tools.join(" → ")}</dd></div>
-                <div><dt>Safety gate</dt><dd>{latestDecision.action_guard}</dd></div>
-                <div><dt>So sánh plan</dt><dd>{latestDecision.plan_diff?.summary ?? "Không tạo candidate plan."}</dd></div>
-                {run?.replanned_plan ? <div><dt>F1 realtime candidate</dt><dd>{run.replanned_plan.route.provider} · {run.replanned_plan.route.distance_km.toFixed(1)} km · SOC đích {run.replanned_plan.final_arrival_soc_percent.toFixed(1)}% · {run.replanned_plan.charging_stops.length ? `Trạm mới: ${run.replanned_plan.charging_stops.map((stop) => stop.name).join(" → ")}` : "Không cần dừng sạc"}</dd></div> : null}
-              </dl>
-            </> : <p>Agent sẽ phân loại intent, chọn tool, kiểm tra plan diff và đề xuất hành động khi phát hiện biến cố.</p>}
+              <section className="ai-location-block" aria-label="Vị trí và độ mới dữ liệu xe">
+                <div><span>Vị trí hiện tại</span><strong>{telemetry ? `${telemetry.lat.toFixed(4)}, ${telemetry.lng.toFixed(4)}` : "Chưa có dữ liệu"}</strong></div>
+                <div className={staleTelemetry ? "is-stale" : "is-fresh"}><span>{staleTelemetry ? "!" : "✓"}</span><strong>{staleTelemetry ? "Dữ liệu xe đã cũ" : "Dữ liệu xe còn hiệu lực"}</strong></div>
+                <p>{staleTelemetry ? "Đang chờ GPS và mức pin mới..." : `SOC hiện tại ${actualSoc.toFixed(1)}% · cập nhật ${telemetry?.age_seconds.toFixed(0) ?? 0} giây trước`}</p>
+              </section>
+              <div className="ai-intent">{INTENT_LABELS[latestDecision.intent] ?? "Xử lý sự kiện hành trình"}</div>
+              <p className="ai-explanation">{decisionSummary}</p>
+              <ol className="tracking-thought-stream" aria-live="polite" aria-label="Nhật ký phân tích trực tiếp của trợ lý">
+                {publicTrace.slice(0, visibleTraceSteps).map((step, index) => (
+                  <li className={step.tone ? `is-${step.tone}` : ""} key={`${step.title}-${index}`}>
+                    <span className="thought-step-index">{index + 1}</span>
+                    <div><strong>{step.title}</strong><p>{step.detail}</p></div>
+                    <span className="thought-step-state">{index === visibleTraceSteps - 1 && visibleTraceSteps < publicTrace.length ? "Đang xử lý" : "Hoàn tất"}</span>
+                  </li>
+                ))}
+              </ol>
+              {run?.replanned_plan ? <div className="ai-plan-result"><span>Lộ trình thay thế đã kiểm tra</span><strong>{run.replanned_plan.route.distance_km.toFixed(1)} km · SOC đích {run.replanned_plan.final_arrival_soc_percent.toFixed(1)}%</strong><p>{run.replanned_plan.charging_stops.length ? `Trạm sạc: ${run.replanned_plan.charging_stops.map((stop) => stop.name).join(" → ")}` : "Không cần dừng sạc"}</p></div> : null}
+            </> : <p>Trợ lý sẽ hiển thị lần lượt các bước kiểm tra dữ liệu, ràng buộc an toàn và hành động đề xuất khi phát hiện biến cố.</p>}
           </article>
-          <div className={`tracking-action ${awaitingAction ? "is-alert" : ""}`}>{run?.applied_action ? `ĐÃ ÁP DỤNG · ${run.applied_action}` : latestDecision?.action ?? "Không cần tái lập kế hoạch"}</div>
+          {latestDecision ? <section className={`tracking-recommended-action ${awaitingAction ? "is-alert" : ""}`}>
+            <span>Hành động đề xuất</span>
+            <strong>{telemetryRecoveryDecision ? (staleTelemetry ? "Yêu cầu dữ liệu xe mới" : "Dữ liệu xe đã được cập nhật") : noFeasibleReplan ? "Yêu cầu hỗ trợ vận hành" : "Lập lại kế hoạch từ vị trí hiện tại"}</strong>
+            <p>{telemetryRecoveryDecision ? (staleTelemetry ? "Cần GPS và SOC mới trước khi đánh giá lại. Lộ trình hiện tại được giữ nguyên." : "GPS và SOC mới đã hợp lệ. Xe đang tiếp tục đúng lộ trình trước đó.") : decisionSummary}</p>
+            {awaitingAction && !noFeasibleReplan ? <button type="button" disabled={busy} onClick={requestAction}>{userActionLabel}</button> : null}
+          </section> : <div className="tracking-action">Không cần lập lại kế hoạch</div>}
         </aside>
       </section>
+
+      {pendingAction ? <div className="tracking-confirm-backdrop" role="presentation" onMouseDown={() => !busy && setPendingAction(null)}>
+        <section className="tracking-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="tracking-confirm-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="tracking-confirm-close" type="button" aria-label="Đóng" disabled={busy} onClick={() => setPendingAction(null)}>×</button>
+          <span className="tracking-confirm-icon">{pendingAction === "refresh-telemetry" ? "⌖" : "↻"}</span>
+          <p className="tracking-card-label">XÁC NHẬN HÀNH ĐỘNG</p>
+          <h2 id="tracking-confirm-title">{pendingAction === "refresh-telemetry" ? "Yêu cầu GPS và mức pin mới?" : "Lập lại kế hoạch hành trình?"}</h2>
+          <p>{pendingAction === "refresh-telemetry"
+            ? "Hệ thống sẽ yêu cầu một mẫu GPS/SOC mới. Không lập lại tuyến từ dữ liệu cũ; khi dữ liệu hợp lệ, xe tiếp tục lộ trình hiện tại."
+            : "Hệ thống sẽ dùng GPS và SOC hiện tại để tạo lộ trình thay thế, kiểm tra an toàn rồi mới áp dụng."}</p>
+          <div className="tracking-confirm-facts">
+            <span>Vị trí <strong>{telemetry ? `${telemetry.lat.toFixed(4)}, ${telemetry.lng.toFixed(4)}` : "—"}</strong></span>
+            <span>Mức pin <strong>{telemetry ? `${telemetry.actual_soc_percent.toFixed(1)}%` : "—"}</strong></span>
+            <span>Lộ trình hiện tại <strong>{pendingAction === "refresh-telemetry" ? "Giữ nguyên" : "Chỉ đổi sau kiểm tra"}</strong></span>
+          </div>
+          <div className="tracking-confirm-actions">
+            <button type="button" disabled={busy} onClick={() => setPendingAction(null)}>Quay lại</button>
+            <button type="button" className="is-primary" disabled={busy} onClick={() => { void control(pendingAction); }}>{busy ? "Đang xử lý..." : "Xác nhận yêu cầu"}</button>
+          </div>
+        </section>
+      </div> : null}
     </main>
   );
 }

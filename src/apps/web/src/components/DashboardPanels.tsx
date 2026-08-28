@@ -70,6 +70,7 @@ export function ProposalSummary({
   loading,
   planningMessage,
   onChooseJourney,
+  confirming,
 }: {
   plan: PlanProposal | null;
   alternatives: PlanProposal[];
@@ -78,6 +79,7 @@ export function ProposalSummary({
   loading: boolean;
   planningMessage: string;
   onChooseJourney: (plan: PlanProposal) => void;
+  confirming?: boolean;
 }) {
   return (
     <aside className="proposal-card">
@@ -156,7 +158,7 @@ export function ProposalSummary({
 
           <div className="plan-identity">PLAN v{plan.version} · {plan.status} · {plan.route.provider}</div>
           <p className="selection-reason">{plan.selection_reason} · Giải thích: {plan.explanation_source === "OPENAI" ? "OpenAI trên dữ liệu đã kiểm chứng" : "quy tắc deterministic"}</p>
-          {plan.risk_assessment.is_feasible ? <button className="choose-journey-button" type="button" onClick={() => onChooseJourney(plan)}>✓ Chọn hành trình này và theo dõi</button> : null}
+          {plan.risk_assessment.is_feasible ? <button className="choose-journey-button" type="button" disabled={confirming || plan.status === "CONFIRMED"} onClick={() => onChooseJourney(plan)}>{plan.status === "CONFIRMED" ? "✓ Hành trình đã xác nhận" : confirming ? "Đang xác nhận…" : "✓ Xác nhận hành trình"}</button> : null}
         </>
       ) : null}
     </aside>

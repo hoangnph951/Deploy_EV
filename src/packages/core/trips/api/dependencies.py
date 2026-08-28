@@ -21,9 +21,6 @@ from src.packages.core.trips.infrastructure.geocoding import (
     InMemoryGeocoder,
 )
 from src.packages.core.trips.infrastructure.goong_places import GoongPlacesClient
-from src.packages.core.trips.infrastructure.openai_environment import (
-    OpenAIWebEnvironmentProvider,
-)
 from src.packages.core.trips.infrastructure.openai_recovery import (
     NullRecoveryAdvisor,
     OpenAIRecoveryAdvisor,
@@ -58,6 +55,10 @@ def _build_geocoder(settings):
 @lru_cache
 def get_goong_places_client() -> GoongPlacesClient:
     settings = get_settings()
+    if settings.app_env != "test" and not settings.openai_api_key.strip():
+        raise RuntimeError(
+            "OPENAI_API_KEY is required for runtime AI decision support."
+        )
     return GoongPlacesClient(
         api_key=settings.goong_api_key,
         base_url=settings.goong_api_base_url,
@@ -82,17 +83,17 @@ def get_trip_service() -> TripService:
         station_service = FixtureStationDataService()
         environment_provider = StaticEnvironmentProvider()
     else:
-        if settings.routing_provider == "fixture":
-            routing_provider = InMemoryRoutingProvider()
-        else:
-            routing_provider = GoongRoutingProvider(
-                api_key=settings.goong_api_key,
-                base_url=settings.goong_api_base_url,
-                timeout_seconds=settings.routing_timeout_seconds,
-                max_retries=settings.routing_max_retries,
-                min_request_interval_seconds=settings.goong_min_request_interval_seconds,
-                rate_limit_cooldown_seconds=settings.goong_rate_limit_cooldown_seconds,
-            )
+        # Straight-line interpolation is a deterministic test fixture, not a
+        # road router. Runtime plans must use verified Goong road geometry or
+        # fail explicitly when Goong is unavailable.
+        routing_provider = GoongRoutingProvider(
+            api_key=settings.goong_api_key,
+            base_url=settings.goong_api_base_url,
+            timeout_seconds=settings.routing_timeout_seconds,
+            max_retries=settings.routing_max_retries,
+            min_request_interval_seconds=settings.goong_min_request_interval_seconds,
+            rate_limit_cooldown_seconds=settings.goong_rate_limit_cooldown_seconds,
+        )
         station_service = (
             FixtureStationDataService()
             if settings.station_provider == "fixture"
@@ -119,31 +120,14 @@ def get_trip_service() -> TripService:
                     max_candidates=settings.openai_station_search_max_candidates,
                 ),
             )
-        environment_search_fallback = None
-        if settings.openai_environment_fallback_enabled and settings.openai_api_key:
-            environment_search_fallback = OpenAIWebEnvironmentProvider(
-                api_key=settings.openai_api_key,
-                model=settings.openai_environment_search_model,
-                timeout_seconds=settings.openai_environment_search_timeout_seconds,
-                consumption_margin_percent=(
-                    settings.environment_web_search_consumption_margin_percent
-                ),
+        environment_provider = (
+            StaticEnvironmentProvider()
+            if settings.environment_provider == "fixture"
+            else OpenMeteoEnvironmentProvider(
+                weather_base_url=settings.open_meteo_weather_url,
+                elevation_base_url=settings.open_meteo_elevation_url,
+                timeout_seconds=settings.open_meteo_timeout_seconds,
             )
-        environment_provider = OpenMeteoEnvironmentProvider(
-            weather_base_url=settings.open_meteo_weather_url,
-            elevation_base_url=settings.open_meteo_elevation_url,
-            timeout_seconds=settings.open_meteo_timeout_seconds,
-            max_retries=settings.open_meteo_max_retries,
-            retry_base_delay_seconds=settings.open_meteo_retry_base_delay_seconds,
-            cache_ttl_seconds=settings.open_meteo_cache_ttl_seconds,
-            fallback_enabled=settings.environment_fallback_enabled,
-            fallback_consumption_margin_percent=(
-                settings.environment_fallback_consumption_margin_percent
-            ),
-            cached_consumption_margin_percent=(
-                settings.environment_cached_consumption_margin_percent
-            ),
-            search_fallback_provider=environment_search_fallback,
         )
     planning_runtime = (
         get_legacy_runtime()
@@ -160,7 +144,7 @@ def get_trip_service() -> TripService:
                     model=settings.model_name,
                     timeout_seconds=settings.ai_plan_explanation_timeout_seconds,
                 )
-                if settings.ai_plan_explanation_enabled and settings.openai_api_key
+                if settings.app_env != "test"
                 else DeterministicPlanRanker()
             ),
         )

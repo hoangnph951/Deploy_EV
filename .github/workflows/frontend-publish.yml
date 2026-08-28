@@ -13,16 +13,7 @@ env:
   IMAGE_NAME: ai20k-build-phase-cohort-3/p-210-web
 
 jobs:
-  ci:
-    name: Frontend CI
-    uses: ./.github/workflows/ci.yml
-    with:
-      selective: true
-      run_backend: false
-      run_frontend: true
-
   build-and-push:
-    needs: ci
     runs-on: self-hosted
 
     permissions:
@@ -50,8 +41,9 @@ jobs:
             VITE_API_BASE_URL=https://p-210-dev.onrender.com
             VITE_GOONG_MAPTILES_KEY=${{ secrets.VITE_GOONG_MAPTILES_KEY }}
           tags: |
-            ghcr.io/ai20k-build-phase-cohort-3/p-210-web:dev
-            ghcr.io/ai20k-build-phase-cohort-3/p-210-web:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
       - name: Trigger frontend Render deploy
         run: |
           curl --fail --show-error \

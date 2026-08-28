@@ -99,21 +99,24 @@ class FeasibilityTool:
                 reasons.append(
                     f"Dữ liệu trạm '{stop.name}' đã cũ (>24h); cần kiểm tra trước khi đến."
                 )
+                if "STALE_STATION_DATA" not in reason_codes:
+                    risk_score += 35.0
                 reason_codes.append("STALE_STATION_DATA")
-                risk_score += 35.0
             if stop.station_status == "BUSY":
                 reasons.append(
                     f"VinFast đang ghi nhận metadata trạm '{stop.name}' là BUSY; "
                     "đây không phải availability từng cổng."
                 )
+                if "STATION_BUSY" not in reason_codes:
+                    risk_score += 20.0
                 reason_codes.append("STATION_BUSY")
-                risk_score += 20.0
             if stop.station_status == "UNVERIFIED":
                 reasons.append(
                     f"Trạm '{stop.name}' được tìm từ web fallback và chưa có trạng thái vận hành realtime."
                 )
+                if "UNVERIFIED_STATION_DATA" not in reason_codes:
+                    risk_score += 40.0
                 reason_codes.append("UNVERIFIED_STATION_DATA")
-                risk_score += 40.0
 
         if reserve_soc < energy_result.final_arrival_soc_percent < reserve_soc + 5.0:
             reasons.append(

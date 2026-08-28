@@ -16,14 +16,11 @@ from src.packages.contracts.monitoring import (
     TelemetrySnapshot,
 )
 from src.packages.contracts.trips import PlanProposal
+from src.packages.core.monitoring.application.periodic_risk import PeriodicRiskEvaluator
+from src.packages.core.monitoring.domain.geometry import haversine_km, point_along_polyline
+from src.packages.core.monitoring.domain.risk import SOCRiskState
+from src.packages.core.monitoring.domain.soc import expected_soc_at_distance
 from src.packages.core.trips.application.errors import AppError, ForbiddenError, NotFoundError
-
-
-def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
-    lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
-    dlat, dlon = lat2 - lat1, lon2 - lon1
-    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-    return 6371.0088 * 2 * math.asin(math.sqrt(h))
 
 
 def _offset_lat(lat: float, km: float) -> float:
@@ -46,6 +43,7 @@ class _Session:
     anomaly_emitted: bool = False
     speed_multiplier: float = 1.0
     estimated_duration_seconds: int = 0
+    soc_risk: SOCRiskState = field(default_factory=SOCRiskState.empty)
 
 
 class MonitoringEvaluator:
@@ -76,19 +74,40 @@ class MonitoringSimulatorService:
         self._repository = repository
         self._thresholds = thresholds or MonitoringThresholds()
         self._evaluator = MonitoringEvaluator(self._thresholds)
+        self._soc_risk_evaluator = PeriodicRiskEvaluator(
+            event_threshold=-self._thresholds.max_soc_drop_deviation_percent
+        )
         self._sessions: dict[str, _Session] = {}
         self._lock = RLock()
 
     def start(self, trip_id: str, owner_id: str, request: SimulatorStartRequest) -> SimulationState:
         trip = self._owned_trip(trip_id, owner_id)
+        records = self._repository.get_plan_versions(trip_id)
+        record = (
+            next((item for item in records if item.id == request.plan_id), None)
+            if request.plan_id else None
+        )
+        if record is None:
+            raise AppError(
+                "PLAN_REQUIRED", 409,
+                "Hãy chọn đúng phiên bản hành trình đã được lưu trước khi bắt đầu mô phỏng.",
+            )
+        if record.status != "CONFIRMED":
+            raise AppError(
+                "PLAN_NOT_CONFIRMED", 409,
+                "Hành trình phải được bạn xác nhận trước khi bắt đầu mô phỏng.",
+                {"plan_id": record.id, "plan_version": record.version, "status": record.status},
+            )
         if request.plan is not None:
             plan = request.plan
             if plan.trip_id != trip_id or (request.plan_id and plan.plan_id != request.plan_id):
                 raise AppError("PLAN_MISMATCH", 409, "Proposal đã chọn không thuộc chuyến đi này.")
+            if plan.version != record.version:
+                raise AppError(
+                    "PLAN_MISMATCH", 409,
+                    "Phiên bản hành trình hiển thị không khớp dữ liệu đã xác nhận.",
+                )
         else:
-            records = self._repository.get_plan_versions(trip_id)
-            record = next((item for item in records if item.id == request.plan_id), None) if request.plan_id else None
-            record = record or (records[-1] if records else None)
             if record is None or not record.proposal_json:
                 raise AppError("PLAN_REQUIRED", 409, "Hãy lập kế hoạch trước khi bắt đầu mô phỏng.")
             import json
@@ -106,9 +125,11 @@ class MonitoringSimulatorService:
             if rng.random() >= request.unhappy_probability:
                 scenario = "NORMAL"
             else:
-                candidates = ["ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STALE_TELEMETRY"]
-                if plan.charging_stops:
-                    candidates.append("STATION_UNAVAILABLE")
+                candidates = [
+                    candidate
+                    for candidate in self._random_scenarios(bool(plan.charging_stops))
+                    if candidate != "NORMAL"
+                ]
                 scenario = rng.choice(candidates)
         speed_multiplier, estimated_seconds = self._simulation_pacing(
             plan.route.distance_km, request.speed_multiplier
@@ -130,16 +151,44 @@ class MonitoringSimulatorService:
             session.tick_count += 1
             route_distance = max(session.plan.route.distance_km, 0.01)
             step_km = 0.06 * session.request.tick_interval_seconds * session.speed_multiplier
-            session.distance_km = min(route_distance, session.distance_km + step_km)
+            unavailable_station = None
+            if session.scenario == "STATION_UNAVAILABLE" and session.plan.charging_stops:
+                unavailable_station = self._station_warning_before_move(
+                    session.plan,
+                    current_distance_km=session.distance_km,
+                    next_step_km=step_km,
+                )
+
+            # An availability feed is checked before moving the vehicle into the
+            # affected station. Pausing this tick also guarantees that a large
+            # simulation step cannot jump past the stop before F4 receives it.
+            if unavailable_station is None:
+                session.distance_km = min(route_distance, session.distance_km + step_km)
             progress = session.distance_km / route_distance
             lat, lon = self._point_at(session.plan.route.polyline, progress)
-            expected_soc = self._expected_soc(session.plan, progress)
+            expected_soc = self._expected_soc(session.plan, session.distance_km)
             actual_soc = expected_soc
             freshness = "FRESH"
             recorded_at = datetime.now(UTC)
             trigger = progress >= 0.35 and not session.anomaly_emitted
 
-            if trigger and session.scenario == "ROUTE_DEVIATION":
+            if unavailable_station is not None and not session.anomaly_emitted:
+                session.unavailable_station_ids.append(unavailable_station.station_id)
+                self._emit(
+                    session,
+                    "STATION_UNAVAILABLE",
+                    f"Trạm {unavailable_station.name} không khả dụng (mô phỏng).",
+                    {
+                        "station_id": unavailable_station.station_id,
+                        "station_name": unavailable_station.name,
+                        "station_distance_km": unavailable_station.distance_from_origin_km,
+                        "vehicle_distance_km": round(session.distance_km, 3),
+                        "distance_to_station_km": round(
+                            unavailable_station.distance_from_origin_km - session.distance_km, 3
+                        ),
+                    },
+                )
+            elif trigger and session.scenario == "ROUTE_DEVIATION":
                 # Strictly over 2 km: 2.01 triggers while 1.99 does not.
                 lat = _offset_lat(lat, self._thresholds.max_off_route_distance_km + 0.01)
                 self._emit(session, "ROUTE_DEVIATION", "Xe đã lệch khỏi tuyến dự kiến.", {
@@ -151,12 +200,6 @@ class MonitoringSimulatorService:
                 self._emit(session, "SOC_UNDERPERFORMANCE", "SOC thực tế thấp hơn mức dự kiến.", {
                     "soc_deficit_percent": self._thresholds.max_soc_drop_deviation_percent + 0.1,
                     "threshold_percent": self._thresholds.max_soc_drop_deviation_percent,
-                })
-            elif trigger and session.scenario == "STATION_UNAVAILABLE" and session.plan.charging_stops:
-                station = session.plan.charging_stops[0]
-                session.unavailable_station_ids.append(station.station_id)
-                self._emit(session, "STATION_UNAVAILABLE", f"Trạm {station.name} không khả dụng (mô phỏng).", {
-                    "station_id": station.station_id, "station_name": station.name,
                 })
             elif trigger and session.scenario == "STALE_TELEMETRY":
                 recorded_at -= timedelta(seconds=self._thresholds.max_telemetry_silent_seconds + 1)
@@ -173,6 +216,11 @@ class MonitoringSimulatorService:
                 distance_km=session.distance_km, progress_percent=progress * 100,
                 freshness=freshness, recorded_at=recorded_at,
             )
+            session.soc_risk = self._soc_risk_evaluator.observe(
+                actual_soc_percent=max(0, actual_soc),
+                expected_soc_percent=max(0, expected_soc),
+                prior=session.soc_risk,
+            )
             if progress >= 1 and session.status == "RUNNING":
                 session.status = "COMPLETED"
             return self._state(session)
@@ -181,6 +229,110 @@ class MonitoringSimulatorService:
         self._owned_trip(trip_id, owner_id)
         with self._lock:
             return self._state(self._require_session(trip_id))
+
+    def refresh_telemetry(self, trip_id: str, owner_id: str) -> SimulationState:
+        self._owned_trip(trip_id, owner_id)
+        with self._lock:
+            session = self._require_session(trip_id)
+            latest_stale_event = next((
+                event for event in reversed(session.events)
+                if event.event_type == "STALE_TELEMETRY" and event.status == "ACTIVE"
+            ), None)
+            if session.status != "AWAITING_DECISION" or latest_stale_event is None:
+                raise AppError(
+                    "TELEMETRY_REFRESH_NOT_REQUIRED", 409,
+                    "Hành trình hiện không chờ cập nhật GPS và mức pin.",
+                )
+            if session.telemetry is None:
+                raise AppError("TELEMETRY_REQUIRED", 409, "Chưa có telemetry để làm mới.")
+
+            latest_stale_event.status = "RESOLVED"
+            resolve_event = getattr(self._repository, "resolve_monitoring_event", None)
+            if callable(resolve_event):
+                resolve_event(latest_stale_event.event_id)
+
+            session.telemetry = session.telemetry.model_copy(update={
+                "snapshot_id": str(uuid4()),
+                "freshness": "FRESH",
+                "recorded_at": datetime.now(UTC),
+                "age_seconds": 0.0,
+                "speed_kph": 0.0,
+            })
+            session.status = "RUNNING"
+            session.replan_required = False
+            return self._state(session)
+
+    def activate_replanned_plan(
+        self, trip_id: str, owner_id: str, request: SimulatorStartRequest
+    ) -> SimulationState:
+        self._owned_trip(trip_id, owner_id)
+        if request.plan is None or not request.plan_id:
+            raise AppError("PLAN_REQUIRED", 409, "Cần đầy đủ hành trình mới để tiếp tục mô phỏng.")
+        records = self._repository.get_plan_versions(trip_id)
+        record = next((item for item in records if item.id == request.plan_id), None)
+        if record is None or record.status != "CONFIRMED":
+            raise AppError(
+                "PLAN_NOT_CONFIRMED", 409,
+                "Chỉ có thể chuyển xe sang hành trình mới đã được xác nhận.",
+            )
+        plan = request.plan
+        if plan.trip_id != trip_id or plan.plan_id != request.plan_id or plan.version != record.version:
+            raise AppError("PLAN_MISMATCH", 409, "Hành trình mới không khớp phiên bản đã xác nhận.")
+        if len(plan.route.polyline) < 2:
+            raise AppError("ROUTE_REQUIRED", 409, "Hành trình mới chưa có polyline hợp lệ.")
+
+        with self._lock:
+            session = self._require_session(trip_id)
+            if session.telemetry is None:
+                raise AppError("TELEMETRY_REQUIRED", 409, "Không có vị trí hiện tại để nối hành trình mới.")
+            route_start = plan.route.polyline[0]
+            origin_gap_km = haversine_km(
+                (session.telemetry.lat, session.telemetry.lon),
+                (float(route_start[0]), float(route_start[1])),
+            )
+            if origin_gap_km > 2.0:
+                raise AppError(
+                    "REPLAN_ORIGIN_MISMATCH", 409,
+                    "Hành trình mới không bắt đầu từ vị trí xe tại thời điểm xảy ra sự cố.",
+                    {"origin_gap_km": round(origin_gap_km, 3)},
+                )
+
+            for event in session.events:
+                if event.status != "ACTIVE":
+                    continue
+                event.status = "RESOLVED"
+                resolve_event = getattr(self._repository, "resolve_monitoring_event", None)
+                if callable(resolve_event):
+                    resolve_event(event.event_id)
+
+            previous_telemetry = session.telemetry
+            speed_multiplier, estimated_seconds = self._simulation_pacing(
+                plan.route.distance_km, request.speed_multiplier
+            )
+            session.plan = plan
+            session.request = request
+            session.scenario = "NORMAL"
+            session.status = "RUNNING"
+            session.distance_km = 0.0
+            session.replan_required = False
+            session.anomaly_emitted = False
+            session.speed_multiplier = speed_multiplier
+            session.estimated_duration_seconds = estimated_seconds
+            session.soc_risk = SOCRiskState.empty()
+            session.telemetry = previous_telemetry.model_copy(update={
+                "snapshot_id": str(uuid4()),
+                "lat": previous_telemetry.lat,
+                "lon": previous_telemetry.lon,
+                "soc_percent": previous_telemetry.soc_percent,
+                "expected_soc_percent": previous_telemetry.soc_percent,
+                "speed_kph": 0.0,
+                "distance_km": 0.0,
+                "progress_percent": 0.0,
+                "freshness": "FRESH",
+                "recorded_at": datetime.now(UTC),
+                "age_seconds": 0.0,
+            })
+            return self._state(session)
 
     def decide(self, trip_id: str, owner_id: str, request: SimulationDecisionRequest) -> SimulationState:
         self._owned_trip(trip_id, owner_id)
@@ -201,26 +353,63 @@ class MonitoringSimulatorService:
         session.anomaly_emitted = True
         session.status = "AWAITING_DECISION"
         session.replan_required = event_type != "STALE_TELEMETRY"
-        session.events.append(MonitoringEvent(
+        event = MonitoringEvent(
             id=str(uuid4()), trip_id=session.trip_id, event_type=event_type,
+            related_plan_version=getattr(session.plan, "version", 0),
             severity="CRITICAL" if event_type in {"ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE"} else "WARNING",
             message=message, payload=payload, created_at=datetime.now(UTC),
-        ))
+        )
+        session.events.append(event)
+        save_event = getattr(self._repository, "save_monitoring_event", None)
+        if callable(save_event):
+            save_event(event)
 
     @staticmethod
     def _point_at(polyline: list[list[float]], progress: float) -> tuple[float, float]:
-        index = min(len(polyline) - 2, int(progress * (len(polyline) - 1)))
-        local = progress * (len(polyline) - 1) - index
-        a, b = polyline[index], polyline[index + 1]
-        return a[0] + (b[0] - a[0]) * local, a[1] + (b[1] - a[1]) * local
+        lat, lon, _ = point_along_polyline(polyline, progress)
+        return lat, lon
 
     @staticmethod
-    def _expected_soc(plan: PlanProposal, progress: float) -> float:
-        if not plan.soc_points:
-            return 100 - progress * 20
-        start = plan.soc_points[0].soc_percent
-        end = plan.final_arrival_soc_percent
-        return start + (end - start) * progress
+    def _expected_soc(plan: PlanProposal, distance_km: float) -> float:
+        # SOC is piecewise: it falls while driving, jumps only at a charging
+        # stop (ARRIVAL -> DEPARTURE at the same distance), then falls again.
+        # A single interpolation from origin to destination incorrectly turns
+        # a mid-trip charge into gradual battery gain while the car is moving.
+        points = [point.model_dump(mode="json") for point in plan.soc_points]
+        initial_soc = plan.soc_points[0].soc_percent if plan.soc_points else 100.0
+        return expected_soc_at_distance(
+            points,
+            distance_km,
+            initial_soc_percent=initial_soc,
+            final_soc_percent=plan.final_arrival_soc_percent,
+            route_distance_km=plan.route.distance_km,
+        )
+
+    @staticmethod
+    def _station_warning_before_move(
+        plan: PlanProposal, *, current_distance_km: float, next_step_km: float
+    ):
+        route_distance = max(plan.route.distance_km, 0.01)
+        warning_lead_km = min(20.0, max(5.0, route_distance * 0.15))
+        upcoming = sorted(
+            (
+                stop for stop in plan.charging_stops
+                if stop.distance_from_origin_km > current_distance_km
+            ),
+            key=lambda stop: stop.distance_from_origin_km,
+        )
+        if not upcoming:
+            return None
+        station = upcoming[0]
+        lookahead_km = max(warning_lead_km, next_step_km)
+        return station if current_distance_km + lookahead_km >= station.distance_from_origin_km else None
+
+    @staticmethod
+    def _random_scenarios(has_charging_stops: bool) -> list[str]:
+        scenarios = ["NORMAL", "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STALE_TELEMETRY"]
+        if has_charging_stops:
+            scenarios.append("STATION_UNAVAILABLE")
+        return scenarios
 
     @staticmethod
     def _simulation_pacing(distance_km: float, requested_multiplier: float | None) -> tuple[float, int]:
@@ -258,4 +447,5 @@ class MonitoringSimulatorService:
             tick_count=session.tick_count,
             speed_multiplier=session.speed_multiplier,
             estimated_duration_seconds=session.estimated_duration_seconds,
+            soc_risk=session.soc_risk,
         )

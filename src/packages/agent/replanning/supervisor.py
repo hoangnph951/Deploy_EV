@@ -48,10 +48,21 @@ class ReplanningSupervisor:
 
     def __init__(self, *, client: OpenAI | None = None):
         settings = get_settings()
-        self._model = settings.model_name
+        self._model = settings.openai_replanning_model
         self._client = client
-        if self._client is None and settings.openai_api_key and settings.app_env != "test":
-            self._client = OpenAI(api_key=settings.openai_api_key, timeout=8.0, max_retries=0)
+        if self._client is None and settings.app_env != "test":
+            if not settings.openai_replanning_enabled:
+                raise RuntimeError("OpenAI replanning decision support is disabled.")
+            if not settings.openai_api_key.strip():
+                raise RuntimeError(
+                    "OPENAI_API_KEY is required for simulator agent decisions."
+                )
+            self._client = OpenAI(
+                api_key=settings.openai_api_key.strip(),
+                base_url=settings.openai_base_url or None,
+                timeout=settings.openai_replanning_timeout_seconds,
+                max_retries=0,
+            )
 
     def decide(
         self,

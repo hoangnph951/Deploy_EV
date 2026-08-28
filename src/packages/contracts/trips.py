@@ -254,7 +254,10 @@ class PlanProposal(BaseModel):
     plan_id: str
     trip_id: str
     version: int = 1
-    status: Literal["PENDING", "CONFIRMED", "REJECTED", "SUPERSEDED"] = "PENDING"
+    status: Literal[
+        "PENDING", "CONFIRMED", "REJECTED", "SUPERSEDED",
+        "STALE_BY_NEW_CONTEXT", "INVALIDATED_BY_SAFETY",
+    ] = "PENDING"
     route: RouteGeometry
     charging_stops: list[ChargingStopProposal] = Field(default_factory=list)
     risk_assessment: RiskAssessment
@@ -269,6 +272,7 @@ class PlanProposal(BaseModel):
     strategy: Literal["BALANCED", "FASTEST", "SAFEST"] = "BALANCED"
     selection_reason: str = ""
     explanation_source: Literal["DETERMINISTIC", "OPENAI"] = "DETERMINISTIC"
+    trigger_reason: str | None = None
     created_at: datetime
 
 

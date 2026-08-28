@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/vite-runner.mjs dev",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "build": "npm run typecheck && node scripts/vite-runner.mjs build",
     "preview": "node scripts/vite-runner.mjs preview"

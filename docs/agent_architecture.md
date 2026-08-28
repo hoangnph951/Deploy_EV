@@ -181,7 +181,7 @@ Chạy Uvicorn development server:
 ```
 
 Sau khi khởi chạy thành công:
-- **API Base URL:** `http://localhost:8000/api/v1`
+<!-- - **API Base URL:** `http://localhost:8000/api/v1` -->
 - **Swagger Documentation:** `http://localhost:8000/docs`
 - **ReDoc:** `http://localhost:8000/redoc`
 

@@ -1,27 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
-from time import sleep
-from uuid import uuid4
 
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
-
-from src.packages.core.trips.domain.entities import (
-    PlanningRunRecord,
-    PlanVersionRecord,
-    TripRecord,
-    VehicleProfile,
-)
+from src.packages.contracts.monitoring import MonitoringEvent
+from src.packages.core.replanning.infrastructure.models import MonitoringEventModel
+from src.packages.core.trips.domain.entities import PlanVersionRecord, TripRecord, VehicleProfile
 from src.packages.core.trips.infrastructure.database import Base, build_session_factory
-from src.packages.core.trips.infrastructure.models import (
-    AuditLogModel,
-    PlanningRunModel,
-    PlanVersionModel,
-    TripModel,
-    VehicleProfileModel,
-)
+from src.packages.core.trips.infrastructure.models import PlanVersionModel, TripModel, VehicleProfileModel
 from src.packages.core.trips.infrastructure.vehicle_fixtures import load_vehicle_profile_fixtures
 
 
@@ -82,7 +67,6 @@ class SqlAlchemyTripRepository:
                     assumptions_json=json.loads(trip.assumptions_json),
                     created_at=trip.created_at,
                     updated_at=trip.updated_at,
-                    confirmed_plan_version=trip.confirmed_plan_version,
                 )
             )
             session.commit()
@@ -114,18 +98,7 @@ class SqlAlchemyTripRepository:
                 else json.dumps(model.assumptions_json),
                 created_at=model.created_at,
                 updated_at=model.updated_at,
-                confirmed_plan_version=model.confirmed_plan_version,
             )
-
-    def list_trips_by_owner(self, owner_id: str) -> list[TripRecord]:
-        with self._session_factory() as session:
-            trip_ids = session.scalars(
-                select(TripModel.id)
-                .where(TripModel.owner_id == owner_id)
-                .order_by(TripModel.updated_at.desc())
-                .limit(100)
-            ).all()
-        return [trip for trip_id in trip_ids if (trip := self.get_trip(trip_id)) is not None]
 
     def get_vehicle_profile(self, requested_id: str) -> VehicleProfile:
         with self._session_factory() as session:
@@ -144,85 +117,36 @@ class SqlAlchemyTripRepository:
             )
 
     def save_plan_version(self, plan: PlanVersionRecord) -> None:
-        self.save_plan_group([plan])
+        with self._session_factory() as session:
+            assumptions_dict = json.loads(plan.assumptions_json)
+            if plan.proposal_json:
+                assumptions_dict["proposal"] = json.loads(plan.proposal_json)
 
-    def save_plan_group(self, plans: list[PlanVersionRecord]) -> int:
-        """Allocate one trip version and persist all ranked proposals atomically."""
-        if not plans:
-            raise ValueError("At least one proposal is required.")
-        trip_id = plans[0].trip_id
-        if any(plan.trip_id != trip_id for plan in plans):
-            raise ValueError("A plan group cannot span multiple trips.")
-        ranks = [plan.rank for plan in plans]
-        if len(ranks) != len(set(ranks)):
-            raise ValueError("Plan ranks must be unique within a planning run.")
-
-        last_error: IntegrityError | None = None
-        for attempt in range(4):
-            try:
-                with self._session_factory() as session:
-                    if session.bind is not None and session.bind.dialect.name == "sqlite":
-                        session.connection().exec_driver_sql("BEGIN IMMEDIATE")
-                    else:
-                        session.execute(
-                            select(TripModel.id)
-                            .where(TripModel.id == trip_id)
-                            .with_for_update()
-                        ).scalar_one()
-                    version = int(
-                        session.query(func.max(PlanVersionModel.version))
-                        .filter(PlanVersionModel.trip_id == trip_id)
-                        .scalar()
-                        or 0
-                    ) + 1
-                    for plan in plans:
-                        assumptions = json.loads(plan.assumptions_json)
-                        # Proposal is deliberately stored in its own column.
-                        assumptions.pop("proposal", None)
-                        proposal = (
-                            json.loads(plan.proposal_json) if plan.proposal_json else None
-                        )
-                        if proposal is not None:
-                            proposal["version"] = version
-                            proposal["status"] = plan.status
-                        session.add(
-                            PlanVersionModel(
-                                id=plan.id,
-                                trip_id=plan.trip_id,
-                                version=version,
-                                status=plan.status,
-                                decision_reason=plan.decision_reason,
-                                planning_run_id=plan.planning_run_id,
-                                rank=plan.rank,
-                                strategy=plan.strategy,
-                                is_primary=plan.is_primary,
-                                assumptions=assumptions,
-                                proposal=proposal,
-                                created_at=plan.created_at,
-                                updated_at=plan.updated_at,
-                            )
-                        )
-                    session.commit()
-                    return version
-            except IntegrityError as exc:
-                last_error = exc
-                sleep(0.01 * (attempt + 1))
-        assert last_error is not None
-        raise last_error
+            session.add(
+                PlanVersionModel(
+                    id=plan.id,
+                    trip_id=plan.trip_id,
+                    version=plan.version,
+                    status=plan.status,
+                    assumptions=assumptions_dict,
+                    created_at=plan.created_at,
+                    updated_at=plan.updated_at,
+                )
+            )
+            session.commit()
 
     def get_plan_versions(self, trip_id: str) -> list[PlanVersionRecord]:
         with self._session_factory() as session:
             models = (
                 session.query(PlanVersionModel)
                 .filter(PlanVersionModel.trip_id == trip_id)
-                .order_by(PlanVersionModel.version.asc(), PlanVersionModel.rank.asc())
+                .order_by(PlanVersionModel.version.asc())
                 .all()
             )
             records: list[PlanVersionRecord] = []
             for m in models:
                 assumptions_data = dict(m.assumptions) if isinstance(m.assumptions, dict) else {}
-                legacy_proposal = assumptions_data.pop("proposal", None)
-                proposal_data = m.proposal if m.proposal is not None else legacy_proposal
+                proposal_data = assumptions_data.pop("proposal", None)
                 records.append(
                     PlanVersionRecord(
                         id=m.id,
@@ -233,189 +157,86 @@ class SqlAlchemyTripRepository:
                         proposal_json=json.dumps(proposal_data) if proposal_data else "",
                         created_at=m.created_at,
                         updated_at=m.updated_at,
-                        planning_run_id=m.planning_run_id,
-                        rank=m.rank,
-                        strategy=m.strategy,
-                        is_primary=m.is_primary,
-                        decision_reason=m.decision_reason,
                     )
                 )
             return records
 
-    def get_plan_version(self, plan_id: str) -> PlanVersionRecord | None:
-        with self._session_factory() as session:
-            model = session.get(PlanVersionModel, plan_id)
-            if model is None:
-                return None
-            assumptions_data = dict(model.assumptions) if isinstance(model.assumptions, dict) else {}
-            legacy_proposal = assumptions_data.pop("proposal", None)
-            proposal_data = model.proposal if model.proposal is not None else legacy_proposal
-            return PlanVersionRecord(
-                id=model.id,
-                trip_id=model.trip_id,
-                version=model.version,
-                status=model.status,
-                assumptions_json=json.dumps(assumptions_data),
-                proposal_json=json.dumps(proposal_data) if proposal_data else "",
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-                planning_run_id=model.planning_run_id,
-                rank=model.rank,
-                strategy=model.strategy,
-                is_primary=model.is_primary,
-                decision_reason=model.decision_reason,
-            )
+    def set_plan_status(self, trip_id: str, version: int, status: str) -> bool:
+        from datetime import UTC, datetime
 
-    def apply_plan_decision(
-        self,
-        *,
-        plan_id: str,
-        owner_id: str,
-        expected_version: int,
-        action: str,
-        reason: str | None = None,
-        ip_address: str | None = None,
-    ) -> tuple[PlanVersionRecord, TripRecord]:
-        now = datetime.now(UTC)
         with self._session_factory() as session:
-            plan = session.query(PlanVersionModel).filter(
-                PlanVersionModel.id == plan_id
-            ).with_for_update().one_or_none()
-            if plan is None:
-                raise LookupError("plan")
-            trip = session.query(TripModel).filter(
-                TripModel.id == plan.trip_id
-            ).with_for_update().one_or_none()
-            if trip is None:
-                raise LookupError("trip")
-            if trip.owner_id != owner_id:
-                raise PermissionError("owner")
-            if plan.version != expected_version:
-                raise RuntimeError("version_conflict")
-            if action == "CONFIRM_PLAN":
-                newer_exists = session.query(PlanVersionModel.id).filter(
-                    PlanVersionModel.trip_id == trip.id,
-                    PlanVersionModel.version > expected_version,
-                ).first()
-                if newer_exists is not None:
-                    raise RuntimeError("version_conflict")
-                claimed = session.query(PlanVersionModel).filter(
-                    PlanVersionModel.id == plan.id,
-                    PlanVersionModel.version == expected_version,
-                    PlanVersionModel.status == "PENDING",
-                ).update({"status": "CONFIRMED", "updated_at": now}, synchronize_session=False)
-                if claimed != 1:
-                    session.rollback()
-                    raise RuntimeError("version_conflict")
+            now = datetime.now(UTC)
+            claimed = session.query(PlanVersionModel).filter(
+                PlanVersionModel.trip_id == trip_id,
+                PlanVersionModel.version == version,
+                PlanVersionModel.status == "PENDING",
+            ).update(
+                {"status": status, "updated_at": now},
+                synchronize_session=False,
+            )
+            if claimed != 1:
+                session.rollback()
+                return False
+            if status == "CONFIRMED":
                 session.query(PlanVersionModel).filter(
-                    PlanVersionModel.trip_id == trip.id,
+                    PlanVersionModel.trip_id == trip_id,
                     PlanVersionModel.status == "CONFIRMED",
-                    PlanVersionModel.id != plan.id,
-                ).update({"status": "SUPERSEDED", "updated_at": now}, synchronize_session=False)
-                trip.status = "ACTIVE"
-                trip.confirmed_plan_version = plan.version
-            elif action == "REJECT_PLAN":
-                claimed = session.query(PlanVersionModel).filter(
-                    PlanVersionModel.id == plan.id,
-                    PlanVersionModel.version == expected_version,
-                    PlanVersionModel.status == "PENDING",
+                    PlanVersionModel.version != version,
                 ).update(
-                    {"status": "REJECTED", "decision_reason": reason, "updated_at": now},
+                    {"status": "SUPERSEDED", "updated_at": now},
                     synchronize_session=False,
                 )
-                if claimed != 1:
-                    session.rollback()
-                    raise RuntimeError("version_conflict")
-            else:
-                raise ValueError(action)
-            trip.updated_at = now
-            session.add(AuditLogModel(
-                id=f"audit-{uuid4().hex[:24]}", trip_id=trip.id, plan_id=plan.id,
-                actor_id=owner_id, action=action, ip_address=ip_address,
-                reason=reason, timestamp=now,
+            session.commit()
+            return True
+
+    def save_monitoring_event(self, event: MonitoringEvent) -> None:
+        with self._session_factory() as session:
+            if session.get(MonitoringEventModel, event.event_id) is not None:
+                return
+            session.add(MonitoringEventModel(
+                id=event.event_id,
+                trip_id=event.trip_id,
+                event_type=event.event_type,
+                occurred_at=event.occurred_at,
+                received_at=event.received_at,
+                source_sequence=event.source_sequence,
+                telemetry_snapshot_id=event.telemetry_snapshot_id,
+                related_plan_version=event.related_plan_version,
+                severity=event.severity,
+                correlation_id=event.correlation_id,
+                causation_id=event.causation_id,
+                status="ACTIVE",
+                evidence_json={
+                    "refs": event.evidence_refs,
+                    "station_ids": event.station_ids,
+                    "message": event.message,
+                    "payload": event.payload,
+                },
             ))
             session.commit()
-            return self.get_plan_version(plan_id), self.get_trip(trip.id)
 
-    def update_trip_status(self, trip_id: str, status: str) -> None:
+    def resolve_monitoring_event(self, event_id: str) -> bool:
         with self._session_factory() as session:
-            trip = session.get(TripModel, trip_id)
-            if trip is None:
-                raise LookupError(trip_id)
-            trip.status = status
-            from datetime import UTC, datetime
-
-            trip.updated_at = datetime.now(UTC)
+            updated = session.query(MonitoringEventModel).filter(
+                MonitoringEventModel.id == event_id,
+                MonitoringEventModel.status == "ACTIVE",
+            ).update({"status": "RESOLVED"}, synchronize_session=False)
             session.commit()
+            return updated == 1
 
-    def create_planning_run(self, run: PlanningRunRecord) -> None:
+    def stale_pending_plan(self, trip_id: str, version: int) -> bool:
+        from datetime import UTC, datetime
+
         with self._session_factory() as session:
-            session.add(
-                PlanningRunModel(
-                    id=run.id,
-                    trip_id=run.trip_id,
-                    status=run.status,
-                    started_at=run.started_at,
-                    finished_at=run.finished_at,
-                    trace_id=run.trace_id,
-                    request_snapshot=json.loads(run.request_snapshot_json),
-                    result_code=run.result_code,
-                    error_code=run.error_code,
-                    error_detail=(
-                        json.loads(run.error_detail_json)
-                        if run.error_detail_json
-                        else None
-                    ),
-                )
-            )
+            updated = session.query(PlanVersionModel).filter(
+                PlanVersionModel.trip_id == trip_id,
+                PlanVersionModel.version == version,
+                PlanVersionModel.status == "PENDING",
+            ).update({
+                "status": "STALE_BY_NEW_CONTEXT",
+                "updated_at": datetime.now(UTC),
+            })
             session.commit()
-
-    def mark_planning_run_running(self, run_id: str, started_at) -> None:
-        with self._session_factory() as session:
-            run = session.get(PlanningRunModel, run_id)
-            if run is None:
-                raise LookupError(run_id)
-            run.status = "RUNNING"
-            run.started_at = started_at
-            session.commit()
-
-    def finish_planning_run(
-        self,
-        run_id: str,
-        *,
-        status: str,
-        result_code: str | None,
-        error_code: str | None,
-        error_detail: dict | None,
-        finished_at,
-    ) -> None:
-        with self._session_factory() as session:
-            run = session.get(PlanningRunModel, run_id)
-            if run is None:
-                raise LookupError(run_id)
-            run.status = status
-            run.result_code = result_code
-            run.error_code = error_code
-            run.error_detail = error_detail
-            run.finished_at = finished_at
-            session.commit()
-
-    def get_planning_run(self, run_id: str) -> PlanningRunRecord | None:
-        with self._session_factory() as session:
-            run = session.get(PlanningRunModel, run_id)
-            if run is None:
-                return None
-            return PlanningRunRecord(
-                id=run.id,
-                trip_id=run.trip_id,
-                status=run.status,
-                request_snapshot_json=json.dumps(run.request_snapshot),
-                trace_id=run.trace_id,
-                started_at=run.started_at,
-                finished_at=run.finished_at,
-                result_code=run.result_code,
-                error_code=run.error_code,
-                error_detail_json=(json.dumps(run.error_detail) if run.error_detail else None),
-            )
+            return updated == 1
 
 

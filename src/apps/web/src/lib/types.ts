@@ -408,20 +408,32 @@ export type TripHistoryItem = {
 
 export type TripHistoryResponse = { trips: TripHistoryItem[] };
 
+export type ReplanningPlanDecisionResponse = {
+  trip_id: string;
+  plan_version: number;
+  context_version: number;
+  status: "CONFIRMED" | "REJECTED";
+};
 export type MonitoringEventType = "ROUTE_DEVIATION" | "SOC_UNDERPERFORMANCE" | "STATION_UNAVAILABLE" | "STALE_TELEMETRY";
+export type SimulationScenarioSelection = "RANDOM" | "NORMAL" | MonitoringEventType;
 export type SimulationState = {
   trip_id: string;
   plan_id: string;
   status: "IDLE" | "RUNNING" | "AWAITING_DECISION" | "COMPLETED" | "STOPPED";
   selected_scenario: "NORMAL" | MonitoringEventType;
   telemetry: null | {
+    snapshot_id?: string | null;
     lat: number; lon: number; soc_percent: number; expected_soc_percent: number;
     speed_kph: number; distance_km: number; progress_percent: number;
     source: "SIMULATED"; freshness: "FRESH" | "STALE"; recorded_at: string;
   };
   events: Array<{
-    id: string; event_type: MonitoringEventType; severity: "WARNING" | "CRITICAL";
-    message: string; source: "SIMULATED"; payload: Record<string, unknown>; created_at: string;
+    event_id: string; event_type: MonitoringEventType; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    message: string; source: "SIMULATED"; payload: Record<string, unknown>;
+    occurred_at: string; received_at: string; telemetry_snapshot_id: string | null;
+    related_plan_version: number; evidence_refs: string[]; correlation_id: string;
+    station_ids: string[];
+    status: "ACTIVE" | "OBSOLETE" | "RESOLVED";
   }>;
   unavailable_station_ids: string[];
   replan_required: boolean;
@@ -429,6 +441,63 @@ export type SimulationState = {
   tick_count: number;
   speed_multiplier: number;
   estimated_duration_seconds: number;
+  soc_risk: null | {
+    expected_soc_percent: number; actual_soc_percent: number; residual_percent: number;
+    residual_slope: number | null; consecutive_negative_count: number;
+    consecutive_threshold_breach_count: number; warning_level: "NONE" | "WATCH" | "WARNING" | "EVENT";
+  };
+};
+
+export type ReplanningOutcome = {
+  agent_run_id: string;
+  status: "SUCCEEDED" | "INFEASIBLE" | "INSUFFICIENT_EVIDENCE" | "SEARCH_EXHAUSTED" | "FAILED";
+  epoch: { epoch_id: string; event_ids: string[]; context_version: number; base_plan_version: number; status: string };
+  context: {
+    context_version: number; current_confirmed_plan_version: number; pending_plan_version: number | null;
+    telemetry_snapshot_id: string; active_event_ids: string[];
+    unresolved_constraints: {
+      route_deviation_active: boolean; soc_underperformance_active: boolean; telemetry_blocked: boolean;
+      excluded_station_ids: string[]; required_evidence: string[]; unresolved_reason_codes: string[];
+    };
+  };
+  assessment: {
+    primary_objective: string; urgency: string; strategy: string; known_facts: string[];
+    constraints: string[]; missing_evidence: string[]; reason_codes: string[];
+    evidence_refs: string[]; confidence: number;
+    public_summary: string;
+  };
+  action: {
+    action: string; reason_codes: string[]; evidence_refs: string[]; user_message: string;
+    limitations: string[]; requires_owner_confirmation: boolean;
+    public_summary: string;
+  };
+  tool_runs: Array<{
+    sequence: number; tool: string; status: string; provider: string; freshness: string;
+    provenance_refs: string[]; reason_codes: string[];
+  }>;
+  decision_trace: Array<{
+    sequence: number; stage: string; summary_code: string; status: string;
+    tool: string | null; evidence_refs: string[]; missing_evidence: string[];
+    reason_codes: string[];
+    public_summary: string;
+  }>;
+  candidate: null | {
+    feasibility_verdict: string;
+    plan_version?: number;
+    strategy?: "MINIMAL_SUBSTITUTION" | "FULL_REPLAN";
+    outcome?: PlanGenerationResponse;
+  };
+  plan_diff_id: string | null;
+  plan_diff: null | {
+    distance_delta_km: number; duration_delta_min: number; final_soc_delta_percent: number;
+    reserve_margin_delta_percent: number; removed_station_ids: string[]; added_station_ids: string[];
+  };
+  reflection: {
+    evidence_sufficient: boolean; hypothesis_status: string; missing_evidence: string[];
+    next_step: string; next_tool: string | null; reason_codes: string[]; evidence_refs: string[];
+    public_summary: string;
+  };
+  created_at: string;
 };
 
 export type ApiErrorEnvelope = {

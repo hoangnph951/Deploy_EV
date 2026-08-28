@@ -176,54 +176,45 @@ Core không import trực tiếp một global `planning_agent`.
 
 ```mermaid
 flowchart TD
-    T[Dữ liệu xe / Tín hiệu trạm sạc]
-    --> PRE[Bộ đánh giá rủi ro định kỳ]
+    T[Telemetry / Station Signal]
+    --> PRE[Periodic Risk Evaluator]
 
-    PRE -->|Chỉ cần cảnh báo| UIW[Giao diện cảnh báo sớm]
-    PRE -->|Vượt ngưỡng sự kiện| EV[Kho sự kiện giám sát]
+    PRE -->|warning only| UIW[Early Warning UI]
+    PRE -->|threshold crossed| EV[MonitoringEvent Store]
 
-    EV --> COORD[Bộ điều phối sự kiện]
-    COORD --> ORD[Sắp xếp + Loại trùng + Gộp sự kiện]
-    ORD --> ARB[Tổng hợp và phân xử ràng buộc]
+    EV --> COORD[Event Coordinator]
+    COORD --> ORD[Ordering + Dedup + Coalescing]
+    ORD --> ARB[Constraint Arbitration]
 
-    ARB --> CTX[Ảnh chụp ngữ cảnh chuyến đi]
-    CTX --> GUARD0[Kiểm tra giới hạn an toàn bắt buộc]
+    ARB --> CTX[TripContextSnapshot]
+    CTX --> GUARD0[Hard Safety Envelope]
 
-    GUARD0 --> SUP[AI điều phối việc lập lại kế hoạch]
+    GUARD0 --> SUP[OpenAI Replanning Supervisor]
 
-    SUP --> TD{AI quyết định bước tiếp theo}
+    SUP --> TD{Supervisor Decision}
 
-    TD -->|Gọi công cụ| PG[Kiểm tra chính sách dùng công cụ]
-    PG --> TOOL[Công cụ chẩn đoán]
-    TOOL --> OBS[Kết quả có cấu trúc]
-    OBS --> REF[AI đánh giá lại tình huống]
+    TD -->|Call Tool| PG[ToolPolicyGuard]
+    PG --> TOOL[Diagnostic Tool]
+    TOOL --> OBS[Typed Observation]
+    OBS --> REF[AI Reflection]
     REF --> TD
 
-    TD -->|Cần phương án mới| F1[F1 tạo phương án kế hoạch]
-    F1 --> SAFE[Tính xác định: tuyến đường + năng lượng + trạm sạc + tính khả thi]
+    TD -->|Build Candidate| F1[F1 PlanningOrchestrator]
+    F1 --> SAFE[Deterministic Route + Energy + Station + Feasibility]
 
-    SAFE --> BASE[Quy đổi kế hoạch hiện tại từ vị trí lúc này]
-    BASE --> DIFF[So sánh kế hoạch cũ và phương án mới]
+    SAFE --> BASE[CurrentPlanProjector]
+    BASE --> DIFF[PlanDiffEngine]
 
-    DIFF --> FINAL[AI cân nhắc đánh đổi và đề xuất hành động]
-    TD -->|Không cần phương án mới| FINAL
+    DIFF --> FINAL[AI Trade-off + Action Proposal]
+    TD -->|No Candidate Needed| FINAL
 
-    FINAL --> AG[Kiểm tra hành động đề xuất]
-    AG --> CV[Kiểm tra phiên bản ngữ cảnh]
-    CV --> TX[Giao dịch cập nhật chuyến đi]
+    FINAL --> AG[ActionGuard]
+    AG --> CV[ContextVersion Guard]
+    CV --> TX[TripService Transaction]
 
-    TX --> PENDING[Phiên bản kế hoạch: CHỜ DUYỆT]
-    PENDING --> USER[Chủ chuyến đi xác nhận hoặc từ chối]
+    TX --> PENDING[PlanVersion PENDING]
+    PENDING --> USER[Owner Confirm / Reject]
 ```
-
-Cách đọc ngắn gọn:
-
-1. F3 theo dõi dữ liệu xe và trạm sạc. Cảnh báo nhẹ chỉ được hiển thị; khi rủi ro vượt ngưỡng thì hệ thống tạo sự kiện cho F4.
-2. F4 chuẩn hóa các sự kiện, gộp những ràng buộc còn hiệu lực và chụp lại ngữ cảnh chuyến đi tại một thời điểm xác định.
-3. Các điều kiện an toàn bắt buộc được kiểm tra trước khi AI tham gia. AI có thể gọi công cụ để thu thập thêm bằng chứng rồi đánh giá lại.
-4. Nếu cần kế hoạch mới, F4 gọi F1 để tạo phương án bằng các phép tính xác định. F4 không tự tính tuyến đường, năng lượng hay tính khả thi.
-5. Hệ thống so sánh phần còn lại của kế hoạch hiện tại với phương án mới. AI giải thích đánh đổi và đề xuất hành động.
-6. Đề xuất chỉ được lưu ở trạng thái `PENDING` sau khi vượt qua kiểm tra hành động và phiên bản ngữ cảnh; người dùng vẫn là người xác nhận hoặc từ chối.
 
 ---
 
@@ -1494,27 +1485,18 @@ NO_FEASIBLE_PLAN_REQUEST_ASSISTANCE
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING
-    PENDING --> CONFIRMED: Chủ chuyến đi xác nhận
-    PENDING --> REJECTED: Chủ chuyến đi từ chối
-    PENDING --> STALE_BY_NEW_CONTEXT: Xuất hiện ngữ cảnh chuyến đi mới hơn
+    PENDING --> CONFIRMED: owner confirms
+    PENDING --> REJECTED: owner rejects
+    PENDING --> STALE_BY_NEW_CONTEXT: newer trip context exists
 
-    CONFIRMED --> SUPERSEDED: Một kế hoạch mới hơn được xác nhận
-    CONFIRMED --> INVALIDATED_BY_SAFETY: Kiểm tra xác định cho thấy không còn an toàn
+    CONFIRMED --> SUPERSEDED: newer plan confirmed
+    CONFIRMED --> INVALIDATED_BY_SAFETY: deterministic unsafe
 
     REJECTED --> [*]
     STALE_BY_NEW_CONTEXT --> [*]
     SUPERSEDED --> [*]
     INVALIDATED_BY_SAFETY --> [*]
 ```
-
-Ý nghĩa các trạng thái:
-
-- `PENDING`: phương án đang chờ người dùng quyết định.
-- `CONFIRMED`: phương án đã được người dùng xác nhận.
-- `REJECTED`: phương án bị người dùng từ chối.
-- `STALE_BY_NEW_CONTEXT`: phương án hết hiệu lực vì trạng thái chuyến đi đã thay đổi.
-- `SUPERSEDED`: kế hoạch đã được thay thế bởi một kế hoạch mới hơn.
-- `INVALIDATED_BY_SAFETY`: kế hoạch bị vô hiệu do không còn đáp ứng điều kiện an toàn.
 
 ## 22.1. Rule
 
@@ -1868,37 +1850,35 @@ LangGraph chịu trách nhiệm runtime, không làm safety reasoning thay tool.
 
 ```mermaid
 flowchart TD
-    START --> LOAD[Tải ngữ cảnh chuyến đi]
-    LOAD --> CHECK{Dữ liệu xe có dùng được không?}
+    START --> LOAD[load_context]
+    LOAD --> CHECK{telemetry usable?}
 
-    CHECK -->|Không| REFRESH[Yêu cầu dữ liệu xe mới]
-    REFRESH --> FINAL[Kết thúc lượt xử lý]
+    CHECK -->|No| REFRESH[request telemetry]
+    REFRESH --> FINAL
 
-    CHECK -->|Có| SUP[AI đánh giá tình huống]
+    CHECK -->|Yes| SUP[supervisor_turn]
 
-    SUP --> DEC{Chọn bước tiếp theo}
+    SUP --> DEC{decision}
 
-    DEC -->|Gọi công cụ| POLICY[Kiểm tra quyền và điều kiện gọi công cụ]
-    POLICY --> EXEC[Thực thi công cụ]
-    EXEC --> OBS[Nhận kết quả có cấu trúc]
-    OBS --> REFLECT[AI đánh giá lại dựa trên kết quả]
+    DEC -->|tool| POLICY[tool_policy_guard]
+    POLICY --> EXEC[execute_tool]
+    EXEC --> OBS[typed_observation]
+    OBS --> REFLECT[supervisor_reflection]
     REFLECT --> DEC
 
-    DEC -->|Tạo phương án mới| BUILD[Gọi F1 tạo phương án]
-    BUILD --> PROJECT[Quy đổi kế hoạch hiện tại]
-    PROJECT --> DIFF[So sánh hai kế hoạch]
-    DIFF --> ACTION[AI đề xuất hành động cuối cùng]
+    DEC -->|candidate| BUILD[build_candidate_with_F1]
+    BUILD --> PROJECT[project_current_plan]
+    PROJECT --> DIFF[compare_plans]
+    DIFF --> ACTION[final_supervisor_action]
 
-    DEC -->|Đã đủ căn cứ để hành động| ACTION
-    DEC -->|Dừng| FINAL
+    DEC -->|action| ACTION
+    DEC -->|stop| FINAL
 
-    ACTION --> AG[Kiểm tra hành động đề xuất]
-    AG --> CV[Kiểm tra phiên bản ngữ cảnh]
-    CV --> PERSIST[Lưu quyết định]
+    ACTION --> AG[action_guard]
+    AG --> CV[context_version_guard]
+    CV --> PERSIST[persist_decision]
     PERSIST --> FINAL
 ```
-
-Sơ đồ này mô tả vòng lặp thực thi bên trong F4: AI có thể gọi nhiều công cụ và suy xét lại, nhưng mỗi lần gọi đều phải qua `ToolPolicyGuard`. Việc tạo phương án phải đi qua F1; trước khi lưu, hành động phải qua `ActionGuard` và `ContextVersionGuard`. Vì vậy AI điều phối và giải thích quyết định, còn các ràng buộc an toàn vẫn do code xác định kiểm soát.
 
 ---
 

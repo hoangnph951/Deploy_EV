@@ -40,6 +40,25 @@ def get_simulation(
     return service.get_state(trip_id, user_id)
 
 
+@router.post("/{trip_id}/refresh-telemetry", response_model=SimulationState)
+def refresh_simulation_telemetry(
+    trip_id: str,
+    user_id: str = Depends(get_current_user_id),
+    service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+) -> SimulationState:
+    return service.refresh_telemetry(trip_id, user_id)
+
+
+@router.post("/{trip_id}/activate-plan", response_model=SimulationState)
+def activate_replanned_simulation_plan(
+    trip_id: str,
+    request: SimulatorStartRequest,
+    user_id: str = Depends(get_current_user_id),
+    service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+) -> SimulationState:
+    return service.activate_replanned_plan(trip_id, user_id, request)
+
+
 @router.post("/{trip_id}/decision", response_model=SimulationState)
 def decide_simulation(
     trip_id: str,

@@ -2,6 +2,17 @@ from src.packages.core.planning.application.orchestrator import (
     PlanningExecution,
     PlanningRequest,
 )
+
+
+def test_planning_request_carries_replanning_station_blacklist():
+    request = PlanningRequest(
+        trip_id="trip-1", owner_id="owner-1", origin_name="A", origin_lat=21.0,
+        origin_lng=105.0, destination_name="B", destination_lat=18.0,
+        destination_lng=105.0, initial_soc_percent=50.0,
+        vehicle_profile=object(), assumptions=object(), excluded_station_ids=["ST-10"],
+    )
+
+    assert request.to_state()["excluded_station_ids"] == ["ST-10"]
 from src.packages.core.planning.domain.outcomes import PlanningOutcomeKind
 
 

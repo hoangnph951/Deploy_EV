@@ -21,6 +21,7 @@ class PlanningRequest:
     initial_soc_percent: float
     vehicle_profile: VehicleProfile
     assumptions: AssumptionSnapshot
+    excluded_station_ids: list[str] | None = None
 
     def to_state(self) -> dict[str, Any]:
         return {
@@ -35,6 +36,7 @@ class PlanningRequest:
             "initial_soc_percent": self.initial_soc_percent,
             "vehicle_profile": self.vehicle_profile,
             "assumptions": self.assumptions,
+            "excluded_station_ids": list(self.excluded_station_ids or []),
         }
 
 

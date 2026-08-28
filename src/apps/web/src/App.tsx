@@ -11,12 +11,11 @@ import { RecoveryPanel } from "./components/RecoveryPanel";
 import { SocChart } from "./components/SocChart";
 import { TripPlanMap } from "./components/TripPlanMap";
 import { TripMonitoringDashboard } from "./components/TripMonitoringDashboard";
-import { TripHistoryPage } from "./components/TripHistoryPage";
 import { VehicleSetup } from "./components/VehicleSetup";
 import {
   ApiError,
-  confirmTripPlan,
   clearAccessToken,
+  confirmPlan,
   createTrip,
   createTripPlan,
   createTripPlanStream,
@@ -24,11 +23,11 @@ import {
   getCurrentAssumptions,
   getCurrentUser,
   listMyVehicles,
-  listTripHistory,
   listVehicleProfiles,
   logoutAccount,
+  rejectReplanningPlan,
   setDefaultVehicle,
-  replanTrip,
+  submitF4Replan,
 } from "./lib/api";
 import type {
   AmbiguousCandidate,
@@ -40,11 +39,11 @@ import type {
   PlanProposal,
   PlanningRecoveryResponse,
   RecoveryOption,
+  ReplanningOutcome,
   TripCreatePayload,
   UserVehicle,
   VehicleProfileSnapshot,
   SimulationState,
-  TripHistoryItem,
 } from "./lib/types";
 
 const formSchema = z.object({
@@ -116,7 +115,7 @@ function applyResolution(
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"planning" | "tracking" | "history">("planning");
+  const [activeTab, setActiveTab] = useState<"planning" | "tracking">("planning");
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [vehicleProfiles, setVehicleProfiles] = useState<VehicleProfileSnapshot[]>([]);
@@ -140,10 +139,11 @@ export default function App() {
   const [destinationPlace, setDestinationPlace] = useState<PlaceSelection | null>(null);
   const [planningMessage, setPlanningMessage] = useState("");
   const [simulationState, setSimulationState] = useState<SimulationState | null>(null);
-  const [tripHistory, setTripHistory] = useState<TripHistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState("");
-  const [choosingJourney, setChoosingJourney] = useState(false);
+  const [confirmedPlanId, setConfirmedPlanId] = useState("");
+  const [confirmedPlanSnapshot, setConfirmedPlanSnapshot] = useState<PlanProposal | null>(null);
+  const [planContextVersion, setPlanContextVersion] = useState(1);
+  const [confirmingPlan, setConfirmingPlan] = useState(false);
+  const [activeReplan, setActiveReplan] = useState<ReplanningOutcome | null>(null);
 
   const {
     register,
@@ -253,47 +253,9 @@ export default function App() {
       setSelectedVehicleId("");
       setPlanProposal(null);
       setPlanAlternatives([]);
+      setConfirmedPlanSnapshot(null);
       setNoFeasiblePlan(null);
       setRecoveryResult(null);
-      setTripHistory([]);
-    }
-  };
-
-  const loadTripHistory = async () => {
-    setHistoryLoading(true);
-    setHistoryError("");
-    try {
-      const response = await listTripHistory();
-      setTripHistory(response.trips);
-    } catch (error) {
-      setHistoryError(error instanceof ApiError
-        ? error.payload.error.message
-        : error instanceof DOMException && error.name === "TimeoutError"
-          ? "Máy chủ không phản hồi khi tải lịch sử. Vui lòng thử lại."
-          : "Không thể tải lịch sử hành trình.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  const openHistory = () => {
-    setActiveTab("history");
-    void loadTripHistory();
-  };
-
-  const chooseJourney = async (selectedPlan: PlanProposal) => {
-    setChoosingJourney(true);
-    setInlineError("");
-    try {
-      const response = await confirmTripPlan(selectedPlan.plan_id, selectedPlan.version);
-      setPlanProposal(response.plan);
-      setPlanAlternatives((plans) => plans.map((plan) => plan.plan_id === response.plan.plan_id ? response.plan : plan));
-      setSimulationState(null);
-      setActiveTab("tracking");
-    } catch (error) {
-      setInlineError(error instanceof ApiError ? error.payload.error.message : "Không thể lưu hành trình đã chọn.");
-    } finally {
-      setChoosingJourney(false);
     }
   };
 
@@ -318,34 +280,43 @@ export default function App() {
         setRecoveryResult(response);
         setPlanProposal(response.plan);
         setPlanAlternatives(response.alternatives?.length ? response.alternatives : [response.plan]);
-      } else {
+      } else if (response.outcome === "PLAN_CREATED") {
         setNoFeasiblePlan(null);
         setRecoveryResult(null);
         setPlanProposal(response.plan);
         setPlanAlternatives(response.alternatives?.length ? response.alternatives : [response.plan]);
       }
     } catch (error) {
-      setPlanningMessage("Agent không thể hoàn tất kế hoạch.");
+      setPlanningMessage("");
       setInlineError(
         error instanceof ApiError
           ? error.payload.error.message
-          : "Không thể lập kế hoạch lúc này. Vui lòng thử lại.",
+          : error instanceof Error
+            ? error.message
+            : "Không thể lập kế hoạch lúc này. Vui lòng thử lại.",
       );
     } finally {
       setPlanningLoading(false);
     }
   };
 
-  const generateReplan = async () => {
-    if (!simulationState) return;
+  const generateReplan = async (
+    state: SimulationState,
+    canonicalEvent: SimulationState["events"][number],
+    onTrace?: (trace: import("./lib/types").ReplanningOutcome["decision_trace"][number]) => void,
+  ) => {
     setPlanningLoading(true);
     try {
-      const response = await replanTrip(currentTripId, simulationState);
-      if (response.outcome === "PLAN_CREATED" || response.outcome === "CONDITIONAL") {
+      const run = await submitF4Replan(currentTripId, state, canonicalEvent, onTrace);
+      setActiveReplan(run);
+      setPlanContextVersion(run.context.context_version);
+      const response = run.candidate?.outcome;
+      if (response?.outcome === "PLAN_CREATED" || response?.outcome === "CONDITIONAL") {
         setPlanProposal(response.plan);
         setPlanAlternatives(response.alternatives?.length ? response.alternatives : [response.plan]);
-      } else if (response.outcome === "PROVEN_INFEASIBLE") setNoFeasiblePlan(response);
-      else setRecoveryResult(response);
+      } else if (response?.outcome === "PROVEN_INFEASIBLE") setNoFeasiblePlan(response);
+      else if (response?.outcome === "ACTION_REQUIRED") setRecoveryResult(response);
+      return run;
     } finally { setPlanningLoading(false); }
   };
 
@@ -357,6 +328,10 @@ export default function App() {
     setPlanAlternatives([]);
     setNoFeasiblePlan(null);
     setRecoveryResult(null);
+    setConfirmedPlanId("");
+    setConfirmedPlanSnapshot(null);
+    setActiveReplan(null);
+    setPlanContextVersion(1);
     try {
       const response = await createTrip(payload);
       setResolutionState(null);
@@ -444,8 +419,61 @@ export default function App() {
     setRecoveryResult(null);
   };
 
+  const confirmSelectedJourney = async (selectedPlan: PlanProposal) => {
+    setConfirmingPlan(true);
+    setInlineError("");
+    try {
+      const decision = await confirmPlan(
+        currentTripId,
+        selectedPlan.version,
+        planContextVersion,
+      );
+      setConfirmedPlanId(selectedPlan.plan_id);
+      const confirmedPlan = { ...selectedPlan, status: decision.status } as PlanProposal;
+      setPlanProposal(confirmedPlan);
+      setConfirmedPlanSnapshot(confirmedPlan);
+      setPlanAlternatives((items) => items.map((item) => (
+        item.plan_id === selectedPlan.plan_id
+          ? { ...item, status: decision.status }
+          : item
+      )));
+      setSimulationState(null);
+      setActiveTab("tracking");
+      return true;
+    } catch (error) {
+      setInlineError(error instanceof Error ? error.message : "Không thể xác nhận hành trình.");
+      return false;
+    } finally {
+      setConfirmingPlan(false);
+    }
+  };
+
+  const rejectReplacementJourney = async (replacement: PlanProposal) => {
+    setInlineError("");
+    try {
+      const decision = await rejectReplanningPlan(
+        currentTripId,
+        replacement.version,
+        planContextVersion,
+      );
+      setPlanContextVersion(decision.context_version);
+      if (confirmedPlanSnapshot) {
+        setPlanProposal(confirmedPlanSnapshot);
+        setPlanAlternatives([confirmedPlanSnapshot]);
+      } else {
+        setPlanProposal({ ...replacement, status: "REJECTED" });
+      }
+      setActiveReplan(null);
+      setSimulationState(null);
+      return true;
+    } catch (error) {
+      setInlineError(error instanceof Error ? error.message : "Không thể từ chối phương án mới.");
+      return false;
+    }
+  };
+
   if (authLoading) {
-    return <main className="app-loading"><span>ϟ</span><strong>Đang mở VGo…</strong></main>;
+    return <main className="app-loading"><span>ϟ</span><strong>Đang mở EV ROUTE…</strong></main>;
   }
   if (!currentUser) return <AuthPage onAuthenticated={(result) => { void handleAuthenticated(result); }} />;
   if (showVehicleSetup || userVehicles.length === 0) {
@@ -455,11 +483,11 @@ export default function App() {
   return (
     <main className="ev-dashboard">
       <header className="app-topbar">
-        <a className="brand" href="#top" aria-label="VGo - Lập kế hoạch"><img src="/logo.png" alt="VGo" /></a>
+        <a className="brand" href="#top" aria-label="EV Route - Lập kế hoạch"><span>EV</span> ROUTE</a>
         <nav aria-label="Điều hướng chính">
           <button type="button" className={`nav-item ${activeTab === "planning" ? "nav-item--active" : ""}`} onClick={() => setActiveTab("planning")}>▣ <strong>Lập kế hoạch</strong></button>
-          <button type="button" className={`nav-item ${activeTab === "tracking" ? "nav-item--active" : ""}`} disabled={!planProposal} title={!planProposal ? "Hãy lập kế hoạch trước" : "Theo dõi hành trình"} onClick={() => setActiveTab("tracking")}>▢ <strong>Theo dõi</strong>{planProposal ? <span className="nav-ready-dot" /> : null}</button>
-          <button type="button" className={`nav-item ${activeTab === "history" ? "nav-item--active" : ""}`} onClick={openHistory}>◷ <strong>Lịch sử</strong></button>
+          <button type="button" className={`nav-item ${activeTab === "tracking" ? "nav-item--active" : ""}`} disabled={!planProposal || confirmedPlanId !== planProposal.plan_id} title={confirmedPlanId !== planProposal?.plan_id ? "Hãy xác nhận hành trình trước" : "Theo dõi hành trình"} onClick={() => setActiveTab("tracking")}>▢ <strong>Theo dõi</strong>{confirmedPlanId === planProposal?.plan_id ? <span className="nav-ready-dot" /> : null}</button>
+          <span className="nav-item">◷ Lịch sử</span>
           <span className="nav-item">? Hỗ trợ</span>
         </nav>
         <div className="account-actions">
@@ -577,7 +605,8 @@ export default function App() {
           reserveSoc={planProposal?.assumptions.reserve_soc_percent ?? assumptions?.reserve_soc_percent ?? 15}
           loading={planningLoading || submitting}
           planningMessage={planningMessage}
-          onChooseJourney={(selectedPlan) => { if (!choosingJourney) void chooseJourney(selectedPlan); }}
+          confirming={confirmingPlan}
+          onChooseJourney={(selectedPlan) => { void confirmSelectedJourney(selectedPlan); }}
         />
       </section>
 
@@ -598,7 +627,7 @@ export default function App() {
           <RecoveryPanel result={recoveryResult} onApplyEndpoint={applyRecoveryEndpoint} />
         </section>
       ) : null}
-      </> : activeTab === "tracking" ? (
+      </> : (
         <section className="tracking-page" id="top">
           {planProposal ? <>
             <header className="tracking-page-header">
@@ -606,12 +635,35 @@ export default function App() {
               <button type="button" onClick={() => setActiveTab("planning")}>← Xem lại kế hoạch</button>
             </header>
             <div className="tracking-grid">
-              <section className="tracking-map"><TripPlanMap plan={planProposal} origin={originPlace} destination={destinationPlace} telemetry={simulationState?.telemetry} /></section>
-              <TripMonitoringDashboard tripId={currentTripId} plan={planProposal} onRequestReplan={generateReplan} onStateChange={setSimulationState} />
+              <section className="tracking-map"><TripPlanMap
+                key={planProposal.plan_id}
+                mapId="tracking-route-map"
+                plan={planProposal}
+                referencePlan={
+                  planProposal.status === "PENDING"
+                  && confirmedPlanSnapshot?.plan_id !== planProposal.plan_id
+                    ? confirmedPlanSnapshot
+                    : null
+                }
+                excludedStationIds={activeReplan?.context.unresolved_constraints.excluded_station_ids ?? []}
+                origin={originPlace}
+                destination={destinationPlace}
+                telemetry={simulationState?.telemetry}
+              /></section>
+              <TripMonitoringDashboard
+                tripId={currentTripId}
+                plan={planProposal}
+                planConfirmed={confirmedPlanId === planProposal.plan_id && planProposal.status === "CONFIRMED"}
+                onCanonicalEvent={generateReplan}
+                onConfirmPlan={confirmSelectedJourney}
+                onRejectPlan={rejectReplacementJourney}
+                confirmingPlan={confirmingPlan}
+                onStateChange={setSimulationState}
+              />
             </div>
           </> : <div className="tracking-empty"><span>⌁</span><h2>Chưa có hành trình để theo dõi</h2><p>Hãy lập và chọn một kế hoạch trước khi bắt đầu mô phỏng.</p><button type="button" onClick={() => setActiveTab("planning")}>Đi tới lập kế hoạch</button></div>}
         </section>
-      ) : <TripHistoryPage trips={tripHistory} loading={historyLoading} error={historyError} onRetry={() => { void loadTripHistory(); }} />}
+      )}
 
       {resolutionState ? (
         <div className="modal-backdrop" role="presentation">

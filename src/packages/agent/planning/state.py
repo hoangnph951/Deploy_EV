@@ -30,6 +30,7 @@ class AgentState(TypedDict, total=False):
     excluded_station_ids: list[str]
     vehicle_profile: VehicleProfile
     assumptions: AssumptionSnapshot
+    excluded_station_ids: list[str]
     route_result: RoutingResult
     candidate_stations: list[CandidateStation]
     seed_candidate_stations: list[CandidateStation]

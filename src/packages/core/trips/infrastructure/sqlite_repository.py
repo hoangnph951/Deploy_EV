@@ -200,6 +200,42 @@ class SqliteTripRepository:
                 for row in rows
             ]
 
+    def set_plan_status(self, trip_id: str, version: int, status: str) -> bool:
+        from datetime import UTC, datetime
+
+        with self._connect() as connection:
+            # Claim the pending version atomically; this prevents two concurrent
+            # confirmations from both observing PENDING on SQLite.
+            now = datetime.now(UTC).isoformat()
+            claimed = connection.execute(
+                "UPDATE plan_versions SET status = ?, updated_at = ? "
+                "WHERE trip_id = ? AND version = ? AND status = 'PENDING'",
+                (status, now, trip_id, version),
+            )
+            if claimed.rowcount != 1:
+                connection.rollback()
+                return False
+            if status == "CONFIRMED":
+                connection.execute(
+                    "UPDATE plan_versions SET status = 'SUPERSEDED', updated_at = ? "
+                    "WHERE trip_id = ? AND status = 'CONFIRMED' AND version != ?",
+                    (now, trip_id, version),
+                )
+            connection.commit()
+            return True
+
+    def stale_pending_plan(self, trip_id: str, version: int) -> bool:
+        from datetime import UTC, datetime
+
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE plan_versions SET status = 'STALE_BY_NEW_CONTEXT', updated_at = ? "
+                "WHERE trip_id = ? AND version = ? AND status = 'PENDING'",
+                (datetime.now(UTC).isoformat(), trip_id, version),
+            )
+            connection.commit()
+            return cursor.rowcount == 1
+
 
     def _parse_sqlite_path(self, database_url: str) -> Path:
         prefix = "sqlite:///"

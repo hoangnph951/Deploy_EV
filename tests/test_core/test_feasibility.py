@@ -132,6 +132,33 @@ def test_stale_station_is_risky_not_silently_fresh() -> None:
     assert "STALE_STATION_DATA" in verdict.reason_codes
 
 
+def test_repeated_stale_station_evidence_does_not_multiply_risk_category() -> None:
+    first = ChargingStopProposal(
+        station_id="stale-a",
+        name="Stale A",
+        lat=21.0,
+        lon=105.0,
+        arrival_soc_percent=20.0,
+        departure_soc_percent=80.0,
+        charge_duration_min=30.0,
+        energy_added_kwh=40.0,
+        max_power_kw=50.0,
+        connector_type="CCS2",
+        freshness="STALE",
+    )
+    second = first.model_copy(
+        update={"station_id": "stale-b", "name": "Stale B", "lat": 20.0}
+    )
+
+    verdict = FeasibilityTool().evaluate(
+        energy_result(25.0, stops=[first, second]), assumptions(), 50.0
+    )
+
+    assert verdict.level == "MEDIUM_RISK"
+    assert verdict.risk_score == 35.0
+    assert verdict.reason_codes == ["STALE_STATION_DATA"]
+
+
 def test_unverified_web_station_is_risky_not_silently_official() -> None:
     stop = ChargingStopProposal(
         station_id="web-ccs2",

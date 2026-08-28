@@ -112,6 +112,40 @@ def station_energy_node(state: AgentState) -> dict:
         fallback_temperature_c=state["assumptions"].ambient_temperature_c,
     )
     initial_soc = state.get("initial_soc_percent", 80.0)
+    excluded_station_ids = set(state.get("excluded_station_ids", []))
+
+    direct_energy = runtime.energy_tool.simulate_trip_soc(
+        total_distance_km=route_result.distance_km,
+        initial_soc_percent=initial_soc,
+        vehicle_profile=vehicle_profile,
+        assumptions=state["assumptions"],
+        candidate_stations=[],
+        environment=environment,
+    )
+    direct_verdict = runtime.feasibility_tool.evaluate(
+        energy_result=direct_energy,
+        assumptions=state["assumptions"],
+        initial_soc_percent=initial_soc,
+        required_connector=vehicle_profile.connector_type,
+        no_compatible_connector=False,
+    )
+    if direct_verdict.is_feasible:
+        return {
+            "candidate_stations": [],
+            "no_compatible_connector": False,
+            "detour_distance_exceeded": False,
+            "detour_time_exceeded": False,
+            "energy_result": direct_energy,
+            "route_result": route_result,
+            "feasibility_verdict": direct_verdict,
+            "environment": environment,
+            "route_energy_alternatives": [],
+            "station_provider_unavailable": False,
+            "station_route_validation_failed": False,
+            "station_routing_rate_limited": False,
+            "routing_retry_after_seconds": None,
+            "station_routing_budget_exhausted": False,
+        }
 
     # Avoid station-provider calls when the direct route already satisfies the
     # reserve-SOC policy. This also keeps short trips available if station
@@ -189,6 +223,8 @@ def station_energy_node(state: AgentState) -> dict:
             require_charging_stop=True,
         )
         for station in adaptive_result.discovered_stations:
+            if station.station_id in excluded_station_ids:
+                continue
             stations_by_id.setdefault(station.station_id, station)
         validated.extend(
             {
@@ -199,6 +235,9 @@ def station_energy_node(state: AgentState) -> dict:
                 "includes_backtracking": item.includes_backtracking,
             }
             for item in adaptive_result.validated
+            if not excluded_station_ids.intersection(
+                stop.station_id for stop in item.energy.charging_stops
+            )
         )
         route_failures = adaptive_result.route_failure_count
         station_provider_unavailable = adaptive_result.provider_unavailable
@@ -241,6 +280,8 @@ def station_energy_node(state: AgentState) -> dict:
             dest_name=state.get("destination_name", "Destination"),
         )
         for station in discovered:
+            if station.station_id in excluded_station_ids:
+                continue
             stations_by_id.setdefault(station.station_id, station)
         stations = sorted(
             stations_by_id.values(), key=lambda station: station.distance_from_origin_km
@@ -504,9 +545,12 @@ def recovery_node(state: AgentState) -> dict:
             "recovery_exhausted": True,
             "station_routing_budget_exhausted": True,
         }
+    excluded_station_ids = set(state.get("excluded_station_ids", []))
     if not recovered.validated:
         merged = {station.station_id: station for station in state.get("candidate_stations", [])}
         for station in recovered.discovered_stations:
+            if station.station_id in excluded_station_ids:
+                continue
             merged.setdefault(station.station_id, station)
         return {
             "candidate_stations": list(merged.values()),
@@ -515,12 +559,26 @@ def recovery_node(state: AgentState) -> dict:
         }
 
     ordered = sorted(
-        recovered.validated,
+        [
+            item for item in recovered.validated
+            if not excluded_station_ids.intersection(
+                stop.station_id for stop in item.energy.charging_stops
+            )
+        ],
         key=lambda item: (
             item.route.duration_min + item.energy.total_charge_time_min,
             -item.energy.min_soc_encountered,
         ),
     )[:3]
+    if not ordered:
+        return {
+            "candidate_stations": [
+                station for station in recovered.discovered_stations
+                if station.station_id not in excluded_station_ids
+            ],
+            "recovery_exhausted": True,
+            "recovery_provider_unavailable": recovered.provider_unavailable,
+        }
     selected = ordered[0]
     return {
         "candidate_stations": recovered.discovered_stations,

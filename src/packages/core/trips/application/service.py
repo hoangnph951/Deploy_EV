@@ -17,13 +17,7 @@ from src.packages.core.planning.application.orchestrator import PlanningOrchestr
 from src.packages.core.policies.application.assumptions import AssumptionSnapshotService
 from src.packages.core.policies.application.service import PolicyConfigService
 from src.packages.core.policies.domain.entities import DEFAULT_POLICY
-from src.packages.core.trips.application.errors import (
-    AppError,
-    ForbiddenError,
-    NotFoundError,
-    UnauthorizedActionError,
-    VersionConflictError,
-)
+from src.packages.core.trips.application.errors import AppError, ForbiddenError, NotFoundError
 from src.packages.core.trips.domain.entities import (
     ResolvedLocationData,
     TripRecord,
@@ -165,7 +159,7 @@ class TripService:
                 source_type=trip.soc_source_type,
             ),
             assumptions=assumptions,
-            confirmed_plan_version=trip.confirmed_plan_version,
+            confirmed_plan_version=None,
             latest_telemetry=None,
             active_warnings=[],
             created_at=trip.created_at,
@@ -176,6 +170,10 @@ class TripService:
         self, trip_id: str, owner_id: str, progress_callback=None, *,
         current_lat: float | None = None, current_lon: float | None = None,
         current_soc_percent: float | None = None,
+        excluded_station_ids: list[str] | None = None,
+        preferred_station_ids: list[str] | None = None,
+        require_station_substitution: bool = False,
+        trigger_reason: str | None = None,
     ):
         from src.packages.contracts.trips import PlanCreatedResponse, PlanProposal
         from src.packages.core.trips.domain.entities import PlanVersionRecord
@@ -217,6 +215,7 @@ class TripService:
                     initial_soc_percent=(current_soc_percent if current_soc_percent is not None else trip.initial_soc_percent),
                     vehicle_profile=vehicle_profile,
                     assumptions=assumptions,
+                    excluded_station_ids=list(excluded_station_ids or []),
                 )
             try:
                 execution = orchestrator.plan(request, progress_callback=progress_callback)
@@ -380,31 +379,42 @@ class TripService:
 
         proposal: PlanProposal = state["plan_proposal"]
         alternatives: list[PlanProposal] = state.get("plan_alternatives", [proposal])
+        if trigger_reason:
+            for alternative in alternatives:
+                alternative.trigger_reason = trigger_reason
+        if preferred_station_ids is not None:
+            preferred = list(preferred_station_ids)
+            excluded = set(excluded_station_ids or [])
+            eligible: list[tuple[int, int, PlanProposal]] = []
+            for alternative in alternatives:
+                station_ids = [stop.station_id for stop in alternative.charging_stops]
+                preserved = [
+                    station_id for station_id in station_ids if station_id in preferred
+                ]
+                if alternative.risk_assessment.verdict != "FEASIBLE":
+                    continue
+                if excluded.intersection(station_ids) or preserved != preferred:
+                    continue
+                added_count = sum(
+                    station_id not in preferred for station_id in station_ids
+                )
+                if require_station_substitution and added_count == 0:
+                    continue
+                eligible.append((added_count, len(station_ids), alternative))
+            if eligible:
+                proposal = min(eligible, key=lambda item: (item[0], item[1]))[2]
+                alternatives = [
+                    proposal,
+                    *(item for item in alternatives if item.plan_id != proposal.plan_id),
+                ]
 
-        conditional_codes = {
-            "STATION_BUSY",
-            "UNVERIFIED_STATION_DATA",
-            "ENVIRONMENT_DATA_FALLBACK",
-        }
+        conditional_codes = {"STATION_BUSY", "UNVERIFIED_STATION_DATA"}
         if state.get("recovery_mode") or conditional_codes.intersection(
             proposal.risk_assessment.reason_codes
         ):
             from src.packages.contracts.trips import ConditionalPlanResponse, RecoveryOption
 
             options = []
-            if proposal.environment and proposal.environment.is_degraded:
-                options.append(
-                    RecoveryOption(
-                        code="RETRY_LIVE_ENVIRONMENT_DATA",
-                        title="Thử lại dữ liệu môi trường live",
-                        description=(
-                            "Kế hoạch đã áp dụng biên tiêu hao dự phòng vì Open-Meteo không khả dụng. "
-                            "Hãy lập lại khi có dữ liệu live trước khi khởi hành."
-                        ),
-                        action="CONFIRM_CONDITIONAL",
-                        verified=False,
-                    )
-                )
             for stop in proposal.charging_stops:
                 if stop.station_status == "BUSY":
                     options.append(
@@ -444,8 +454,7 @@ class TripService:
                 alternatives=alternatives,
                 recovery_options=options,
                 summary=(
-                    "Đã tìm được hành trình vượt Safety Gate với biên dự phòng, nhưng có dữ liệu "
-                    "fallback cần xác nhận trước khi dùng."
+                    "Đã tìm được hành trình vượt Safety Gate, nhưng cần xác nhận dữ liệu trạm trước khi dùng."
                 ),
                 created_at=datetime.now(UTC),
             )
@@ -496,89 +505,33 @@ class TripService:
         for r in records:
             if r.proposal_json:
                 data = json.loads(r.proposal_json)
+                data["status"] = r.status
                 proposals.append(PlanProposal.model_validate(data))
 
         return PlanListResponse(trip_id=trip_id, plans=proposals)
 
-    def confirm_plan(self, plan_id: str, owner_id: str, expected_version: int, ip_address: str | None = None):
-        from src.packages.contracts.trips import PlanDecisionResponse, PlanProposal
+    def stale_pending_plan(self, trip_id: str, owner_id: str, version: int) -> bool:
+        trip = self._repository.get_trip(trip_id)
+        if trip is None:
+            raise NotFoundError("Trip")
+        if trip.owner_id != owner_id:
+            raise ForbiddenError()
+        return self._repository.stale_pending_plan(trip_id, version)
 
-        try:
-            record, trip = self._repository.apply_plan_decision(
-                plan_id=plan_id,
-                owner_id=owner_id,
-                expected_version=expected_version,
-                action="CONFIRM_PLAN",
-                ip_address=ip_address,
+    def decide_plan(self, trip_id: str, owner_id: str, version: int, status: str) -> None:
+        trip = self._repository.get_trip(trip_id)
+        if trip is None:
+            raise NotFoundError("Trip")
+        if trip.owner_id != owner_id:
+            raise ForbiddenError()
+        if status not in {"CONFIRMED", "REJECTED"}:
+            raise ValueError("Unsupported plan decision status.")
+        if not self._repository.set_plan_status(trip_id, version, status):
+            raise AppError(
+                "PLAN_NOT_PENDING", 409,
+                "Plan version does not exist or is no longer pending.",
+                {"plan_version": version},
             )
-        except LookupError as exc:
-            raise NotFoundError("Plan") from exc
-        except PermissionError as exc:
-            raise UnauthorizedActionError() from exc
-        except RuntimeError as exc:
-            raise VersionConflictError() from exc
-
-        proposal_data = json.loads(record.proposal_json)
-        proposal_data["status"] = record.status
-        return PlanDecisionResponse(
-            plan=PlanProposal.model_validate(proposal_data),
-            trip=self.get_trip(trip.id, owner_id),
-            action="CONFIRMED",
-        )
-
-    def list_trip_history(self, owner_id: str):
-        from src.packages.contracts.trips import (
-            InitialSocResponse,
-            PlanProposal,
-            TripHistoryItem,
-            TripHistoryResponse,
-            TripLocationResponse,
-        )
-
-        items: list[TripHistoryItem] = []
-        for trip in self._repository.list_trips_by_owner(owner_id):
-            if trip.confirmed_plan_version is None:
-                continue
-            records = self._repository.get_plan_versions(trip.id)
-            record = next(
-                (
-                    candidate
-                    for candidate in records
-                    if candidate.version == trip.confirmed_plan_version
-                    and candidate.status == "CONFIRMED"
-                ),
-                None,
-            )
-            if record is None or not record.proposal_json:
-                continue
-            proposal_data = json.loads(record.proposal_json)
-            proposal_data["status"] = record.status
-            items.append(
-                TripHistoryItem(
-                    trip_id=trip.id,
-                    status=trip.status,
-                    origin=TripLocationResponse(
-                        address=trip.origin_address,
-                        lat=trip.origin_lat,
-                        lng=trip.origin_lng,
-                        source_type=trip.origin_source_type,
-                    ),
-                    destination=TripLocationResponse(
-                        address=trip.destination_address,
-                        lat=trip.destination_lat,
-                        lng=trip.destination_lng,
-                        source_type=trip.destination_source_type,
-                    ),
-                    initial_soc=InitialSocResponse(
-                        value_percent=trip.initial_soc_percent,
-                        source_type=trip.soc_source_type,
-                    ),
-                    selected_plan=PlanProposal.model_validate(proposal_data),
-                    selected_at=record.updated_at,
-                    created_at=trip.created_at,
-                )
-            )
-        return TripHistoryResponse(trips=items)
 
     def _resolve_location(self, location: TripLocationInput, field_name: str) -> ResolvedLocationData:
         if location.lat is not None and location.lng is not None:

@@ -16,10 +16,13 @@ import type {
   VehicleProfileSnapshot,
   SimulationState,
   PlanDecisionResponse,
+  ReplanningPlanDecisionResponse,
   TripHistoryResponse,
   SimulationCatalog,
   SimulationRun,
+  SimulationScenarioSelection,
 } from "./types";
+import { withPlanningStreamTimeout } from "./planningStreamWatchdog";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const LOCAL_TOKEN_KEY = "ev-route-access-token";
@@ -137,17 +140,32 @@ export async function createTripPlanStream(
   tripId: string,
   onProgress: (message: string) => void,
 ): Promise<PlanGenerationResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/plans/stream`, {
-    method: "POST",
-    headers: authenticatedHeaders({ Accept: "text/event-stream" }),
-  });
+  const controller = new AbortController();
+  let response: Response;
+  try {
+    response = await withPlanningStreamTimeout(fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/plans/stream`, {
+      method: "POST",
+      headers: authenticatedHeaders({ Accept: "text/event-stream" }),
+      signal: controller.signal,
+    }), 60_000);
+  } catch (error) {
+    controller.abort();
+    throw error;
+  }
   if (!response.ok || !response.body) return createTripPlan(tripId);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let result: PlanGenerationResponse | null = null;
   while (true) {
-    const chunk = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await withPlanningStreamTimeout(reader.read(), 60_000);
+    } catch (error) {
+      controller.abort();
+      void reader.cancel();
+      throw error;
+    }
     if (chunk.done) break;
     buffer += decoder.decode(chunk.value, { stream: true });
     const records = buffer.split("\n\n");
@@ -227,10 +245,94 @@ export async function replanTrip(tripId: string, state: SimulationState): Promis
   return parseApiResponse<PlanGenerationResponse>(response);
 }
 
-export async function startSimulation(tripId: string, plan: import("./types").PlanProposal): Promise<SimulationState> {
+export async function submitF4Replan(
+  tripId: string,
+  state: SimulationState,
+  canonicalEvent?: SimulationState["events"][number],
+  onTrace?: (trace: import("./types").ReplanningOutcome["decision_trace"][number]) => void,
+): Promise<import("./types").ReplanningOutcome> {
+  if (!state.telemetry || state.events.length === 0) throw new Error("Chưa có event và telemetry để F4 đánh giá.");
+  const telemetryId = state.telemetry.snapshot_id ?? `sim-${state.tick_count}`;
+  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/replans/stream`, {
+    method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      telemetry: { ...state.telemetry, snapshot_id: telemetryId },
+      events: (canonicalEvent ? [canonicalEvent] : state.events).map((event) => ({
+        ...event,
+        telemetry_snapshot_id: event.telemetry_snapshot_id ?? telemetryId,
+        related_plan_version: event.related_plan_version ?? 0,
+      })),
+    }),
+  });
+  if (!response.ok) return parseApiResponse<import("./types").ReplanningOutcome>(response);
+  if (!response.body) throw new Error("Máy chủ không mở được luồng phân tích trực tiếp.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let outcome: import("./types").ReplanningOutcome | null = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as {
+        type: "trace" | "complete" | "error";
+        trace?: import("./types").ReplanningOutcome["decision_trace"][number];
+        outcome?: import("./types").ReplanningOutcome;
+        message?: string;
+      };
+      if (event.type === "trace" && event.trace) onTrace?.(event.trace);
+      if (event.type === "complete" && event.outcome) outcome = event.outcome;
+      if (event.type === "error") throw new Error(event.message || "Không thể phân tích lại hành trình.");
+    }
+    if (done) break;
+  }
+  if (!outcome) throw new Error("Luồng phân tích kết thúc nhưng không trả kết quả.");
+  return outcome;
+}
+
+export async function confirmPlan(
+  tripId: string,
+  version: number,
+  contextVersion: number,
+): Promise<ReplanningPlanDecisionResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/plans/${version}/confirm`, {
+    method: "POST",
+    headers: authenticatedHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      expected_plan_version: version,
+      expected_context_version: contextVersion,
+    }),
+  });
+  return parseApiResponse<ReplanningPlanDecisionResponse>(response);
+}
+
+export async function rejectReplanningPlan(
+  tripId: string,
+  version: number,
+  contextVersion: number,
+): Promise<ReplanningPlanDecisionResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/plans/${version}/reject`, {
+    method: "POST",
+    headers: authenticatedHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      expected_plan_version: version,
+      expected_context_version: contextVersion,
+    }),
+  });
+  return parseApiResponse<ReplanningPlanDecisionResponse>(response);
+}
+
+export async function startSimulation(
+  tripId: string,
+  plan: import("./types").PlanProposal,
+  scenario: SimulationScenarioSelection = "NORMAL",
+): Promise<SimulationState> {
   const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/start`, {
     method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ plan_id: plan.plan_id, plan, seed: Date.now(), scenario: "RANDOM", unhappy_probability: 0.35 }),
+    body: JSON.stringify({ plan_id: plan.plan_id, plan, seed: Date.now(), scenario, unhappy_probability: 0.5 }),
   });
   return parseApiResponse<SimulationState>(response);
 }
@@ -238,6 +340,30 @@ export async function startSimulation(tripId: string, plan: import("./types").Pl
 export async function tickSimulation(tripId: string): Promise<SimulationState> {
   const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/tick`, {
     method: "POST", headers: authenticatedHeaders(),
+  });
+  return parseApiResponse<SimulationState>(response);
+}
+
+export async function refreshSimulationTelemetry(tripId: string): Promise<SimulationState> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/refresh-telemetry`, {
+    method: "POST", headers: authenticatedHeaders(),
+  });
+  return parseApiResponse<SimulationState>(response);
+}
+
+export async function activateSimulationPlan(
+  tripId: string,
+  plan: import("./types").PlanProposal,
+): Promise<SimulationState> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/activate-plan`, {
+    method: "POST",
+    headers: authenticatedHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      plan_id: plan.plan_id,
+      plan,
+      scenario: "NORMAL",
+      speed_multiplier: undefined,
+    }),
   });
   return parseApiResponse<SimulationState>(response);
 }

@@ -1,5 +1,5 @@
 import json
-from queue import Queue
+from queue import Empty, Queue
 from threading import Thread
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -34,6 +34,18 @@ def _expected_version(if_match: str | None) -> int:
         return int(if_match.strip().strip('"'))
     except ValueError as exc:
         raise AppError("VALIDATION_ERROR", 400, "If-Match must be a plan version number.") from exc
+
+
+def _planning_event_stream(events: Queue[dict], heartbeat_seconds: float = 10.0):
+    """Keep SSE intermediaries and clients alive while a planning tool is busy."""
+    while True:
+        try:
+            event = events.get(timeout=heartbeat_seconds)
+        except Empty:
+            event = {"type": "heartbeat"}
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        if event["type"] == "done":
+            break
 
 
 @router.get("/config/assumptions", response_model=AssumptionSnapshot, tags=["configuration"])
@@ -142,6 +154,7 @@ def replan_trip(
         trip_id, owner_id=current_user_id,
         current_lat=request_body.current_lat, current_lon=request_body.current_lon,
         current_soc_percent=request_body.current_soc_percent,
+        excluded_station_ids=request_body.excluded_station_ids,
     )
 
 
@@ -168,15 +181,8 @@ def stream_trip_plan(
 
     Thread(target=run, daemon=True).start()
 
-    def body():
-        while True:
-            event = events.get()
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            if event["type"] == "done":
-                break
-
     return StreamingResponse(
-        body(),
+        _planning_event_stream(events),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

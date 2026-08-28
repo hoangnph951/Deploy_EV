@@ -5,9 +5,12 @@ import type { PlaceSelection, PlanProposal, SimulationState } from "../lib/types
 
 type Props = {
   plan: PlanProposal | null;
+  referencePlan?: PlanProposal | null;
+  excludedStationIds?: string[];
   origin: PlaceSelection | null;
   destination: PlaceSelection | null;
   telemetry?: SimulationState["telemetry"];
+  mapId?: string;
 };
 
 function popupContent(title: string, lines: string[]): HTMLElement {
@@ -24,7 +27,9 @@ function popupContent(title: string, lines: string[]): HTMLElement {
   return container;
 }
 
-export function TripPlanMap({ plan, origin, destination, telemetry }: Props) {
+export function TripPlanMap({
+  plan, referencePlan = null, excludedStationIds = [], origin, destination, telemetry, mapId,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -109,8 +114,10 @@ export function TripPlanMap({ plan, origin, destination, telemetry }: Props) {
 
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
-    if (map.getLayer("trip-route")) map.removeLayer("trip-route");
-    if (map.getSource("trip-route")) map.removeSource("trip-route");
+    for (const sourceId of ["trip-route", "trip-route-reference"]) {
+      if (map.getLayer(sourceId)) map.removeLayer(sourceId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
 
     const bounds = new goongjs.LngLatBounds();
     let pointCount = 0;
@@ -137,10 +144,40 @@ export function TripPlanMap({ plan, origin, destination, telemetry }: Props) {
       pointCount += 1;
     };
 
+    const referenceCoordinates = referencePlan?.route.polyline.map(
+      ([lat, lng]) => [lng, lat] as [number, number],
+    ) ?? [];
+    if (referenceCoordinates.length > 1) {
+      map.addSource("trip-route-reference", {
+        type: "geojson",
+        tolerance: 0,
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: referenceCoordinates },
+        },
+      });
+      map.addLayer({
+        id: "trip-route-reference",
+        type: "line",
+        source: "trip-route-reference",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#64748b",
+          "line-width": 5,
+          "line-opacity": 0.72,
+          "line-dasharray": [2, 2],
+        },
+      });
+      referenceCoordinates.forEach((coordinate) => bounds.extend(coordinate));
+      pointCount += referenceCoordinates.length;
+    }
+
     const routeCoordinates = plan?.route.polyline.map(([lat, lng]) => [lng, lat] as [number, number]) ?? [];
     if (routeCoordinates.length > 1) {
       map.addSource("trip-route", {
         type: "geojson",
+        tolerance: 0,
         data: {
           type: "Feature",
           properties: {},
@@ -168,13 +205,33 @@ export function TripPlanMap({ plan, origin, destination, telemetry }: Props) {
     const destinationPosition = routeDestination ?? (
       destination ? [destination.lng, destination.lat] as [number, number] : null
     );
+    const replannedFromIncident = plan?.trigger_reason === "F4_REPLAN";
 
     if (originPosition) {
-      addMarker(originPosition, "A", "Điểm xuất phát", [origin?.address ?? "Đã chọn"], "#0c7c59");
+      addMarker(
+        originPosition,
+        "A",
+        replannedFromIncident ? "Vị trí sự cố · Bắt đầu tuyến mới" : "Điểm xuất phát",
+        [replannedFromIncident ? "Xe tiếp tục từ GPS tại thời điểm replan." : origin?.address ?? "Đã chọn"],
+        "#0c7c59",
+      );
     }
     if (destinationPosition) {
       addMarker(destinationPosition, "B", "Điểm đến", [destination?.address ?? "Đã chọn"], "#4338ca");
     }
+
+    const excluded = new Set(excludedStationIds);
+    referencePlan?.charging_stops
+      .filter((stop) => excluded.has(stop.station_id))
+      .forEach((stop) => {
+        addMarker(
+          [stop.lon, stop.lat],
+          "×",
+          `${stop.name} · Đã loại khỏi hành trình`,
+          [stop.address, "Trạm không khả dụng; tuyến mới không được phép đi qua trạm này."],
+          "#dc2626",
+        );
+      });
 
     plan?.charging_stops.forEach((stop, index) => {
       addMarker(
@@ -205,24 +262,42 @@ export function TripPlanMap({ plan, origin, destination, telemetry }: Props) {
       map.setCenter(bounds.getCenter());
       map.setZoom(13);
     }
-  }, [destination, mapReady, origin, plan, telemetry]);
+  }, [destination, excludedStationIds, mapReady, origin, plan, referencePlan, telemetry]);
+
+  const isReplacementPreview = Boolean(
+    plan
+    && referencePlan
+    && plan.plan_id !== referencePlan.plan_id
+    && plan.status === "PENDING",
+  );
 
   return (
-    <article className="map-card goong-map-card">
+    <article className="map-card goong-map-card" id={mapId}>
       {mapError ? <div className="goong-map-error">{mapError}</div> : null}
       <div className="goong-map-shell">
         <div ref={containerRef} className="goong-route-map" aria-label="Bản đồ Goong của hành trình" />
         <div className="map-overlay-title">
-          <strong>Lộ trình VGo</strong>
-          <span>Goong · VinFast Locator</span>
+          <strong>{plan?.trigger_reason === "F4_REPLAN" ? "Tuyến còn lại từ vị trí sự cố" : "Lộ trình EV"}</strong>
+          <span>{plan?.route.provider ?? "Chưa có tuyến"} · VinFast Locator</span>
         </div>
         {plan ? (
           <div className="map-plan-badges">
-            <span>PLAN v{plan.version}</span>
+            <span>{isReplacementPreview
+              ? "TUYẾN ĐỀ XUẤT"
+              : plan.status === "CONFIRMED"
+                ? "HÀNH TRÌNH ĐANG ĐI"
+                : `PLAN v${plan.version}`}</span>
             <span className="map-status-badge">{plan.status}</span>
             <span className={`map-risk-badge map-risk-badge--${plan.risk_assessment.level.toLowerCase()}`}>
               {plan.risk_assessment.level.replace(/_/g, " ")}
             </span>
+          </div>
+        ) : null}
+        {isReplacementPreview ? (
+          <div className="map-route-legend" aria-label="Chú thích so sánh hành trình">
+            <span><i className="map-route-swatch map-route-swatch--proposed" />Tuyến thay thế</span>
+            <span><i className="map-route-swatch map-route-swatch--current" />Tuyến hiện tại</span>
+            <strong>Chờ bạn xác nhận</strong>
           </div>
         ) : null}
         {mapLoading && !mapError ? (
