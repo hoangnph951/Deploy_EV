@@ -159,7 +159,7 @@ class TripService:
                 source_type=trip.soc_source_type,
             ),
             assumptions=assumptions,
-            confirmed_plan_version=None,
+            confirmed_plan_version=trip.confirmed_plan_version,
             latest_telemetry=None,
             active_warnings=[],
             created_at=trip.created_at,
@@ -176,7 +176,6 @@ class TripService:
         trigger_reason: str | None = None,
     ):
         from src.packages.contracts.trips import PlanCreatedResponse, PlanProposal
-        from src.packages.core.trips.domain.entities import PlanVersionRecord
         from src.packages.core.trips.infrastructure.environment import EnvironmentProviderError
         from src.packages.core.trips.infrastructure.routing import (
             RoutingProviderError,
@@ -236,6 +235,8 @@ class TripService:
                 )
                 if recovery is not None:
                     return recovery
+            if hasattr(self._repository, "update_trip_status"):
+                self._repository.update_trip_status(trip.id, "PLANNING_FAILED")
             raise AppError(
                 code="ROUTING_UNAVAILABLE",
                 status_code=503,
@@ -244,6 +245,31 @@ class TripService:
             ) from exc
         except StationProviderError as exc:
             from src.packages.core.trips.infrastructure.station_service import VinFastAccessDeniedError
+
+            if not isinstance(exc, VinFastAccessDeniedError):
+                from src.packages.contracts.trips import ActionRequiredResponse, RecoveryOption
+
+                if hasattr(self._repository, "update_trip_status"):
+                    self._repository.update_trip_status(trip.id, "PLANNING_FAILED")
+                return ActionRequiredResponse(
+                    trip_id=trip.id,
+                    summary=(
+                        "Chưa đủ dữ liệu trạm để chứng minh một chuỗi sạc an toàn. "
+                        "Hãy thử lại khi nguồn dữ liệu trạm hoạt động ổn định."
+                    ),
+                    failure_category="STATION_DATA",
+                    provider="STATION_PROVIDER_CHAIN",
+                    provider_status="UNAVAILABLE",
+                    recovery_options=[
+                        RecoveryOption(
+                            code="RETRY_STATION_DISCOVERY",
+                            title="Thử lại dữ liệu trạm",
+                            description="Tính lại hành trình sau khi dữ liệu trạm được khôi phục.",
+                            action="RETRY",
+                        )
+                    ],
+                    created_at=datetime.now(UTC),
+                )
 
             if isinstance(exc, VinFastAccessDeniedError):
                 raise AppError(
@@ -263,6 +289,8 @@ class TripService:
                 details={"provider": "STATION_PROVIDER_CHAIN"},
             ) from exc
         except EnvironmentProviderError as exc:
+            if hasattr(self._repository, "update_trip_status"):
+                self._repository.update_trip_status(trip.id, "PLANNING_FAILED")
             raise AppError(
                 code="ENVIRONMENT_DATA_UNAVAILABLE",
                 status_code=503,
@@ -275,10 +303,30 @@ class TripService:
                 from src.packages.contracts.trips import ActionRequiredResponse, RecoveryOption
 
                 retry_after = state.get("routing_retry_after_seconds")
-                wait_text = (
-                    f" khoảng {max(1, round(retry_after))} giây"
-                    if isinstance(retry_after, (int, float))
-                    else " một lúc"
+                return ActionRequiredResponse(
+                    trip_id=trip.id,
+                    summary=(
+                        "Goong đang giới hạn tần suất xác minh các chặng qua trạm sạc. "
+                        "Lượt tìm đã dừng để không tiếp tục gửi request."
+                    ),
+                    failure_category="FEASIBILITY",
+                    provider="GOONG_DIRECTIONS",
+                    provider_status="RATE_LIMITED",
+                    http_status=429,
+                    retry_after_seconds=(
+                        float(retry_after)
+                        if isinstance(retry_after, (int, float))
+                        else None
+                    ),
+                    recovery_options=[
+                        RecoveryOption(
+                            code="RETRY_AFTER_RATE_LIMIT",
+                            title="Thử lại sau thời gian chờ",
+                            description="Hãy tính lại hành trình sau khi provider cho phép request mới.",
+                            action="RETRY",
+                        )
+                    ],
+                    created_at=datetime.now(UTC),
                 )
             if state.get("station_routing_budget_exhausted"):
                 from src.packages.contracts.trips import ActionRequiredResponse, RecoveryOption
@@ -299,29 +347,6 @@ class TripService:
                             description=(
                                 "Các cạnh đã xác minh được cache; lượt tiếp theo có thể tiếp tục với ít "
                                 "request Goong hơn."
-                            ),
-                            action="RETRY",
-                        )
-                    ],
-                    created_at=datetime.now(UTC),
-                )
-                return ActionRequiredResponse(
-                    trip_id=trip.id,
-                    summary=(
-                        "Goong đang giới hạn tần suất khi hệ thống xác minh các chặng qua trạm sạc. "
-                        "Lượt tìm đã được dừng để không tiếp tục gửi request."
-                    ),
-                    failure_category="FEASIBILITY",
-                    provider="GOONG_DIRECTIONS",
-                    provider_status="RATE_LIMITED",
-                    http_status=429,
-                    recovery_options=[
-                        RecoveryOption(
-                            code="RETRY_AFTER_RATE_LIMIT",
-                            title=f"Thử lại sau{wait_text}",
-                            description=(
-                                "Circuit breaker đang bảo vệ quota Goong. Khi hết thời gian chờ, "
-                                "hãy tính lại hành trình."
                             ),
                             action="RETRY",
                         )
@@ -379,6 +404,11 @@ class TripService:
 
         proposal: PlanProposal = state["plan_proposal"]
         alternatives: list[PlanProposal] = state.get("plan_alternatives", [proposal])
+        from src.packages.agent.integrations.explanations import build_grounded_explanation
+
+        candidates = list(state.get("candidate_stations", []))
+        for alternative in alternatives:
+            alternative.explanation = build_grounded_explanation(alternative, candidates)
         if trigger_reason:
             for alternative in alternatives:
                 alternative.trigger_reason = trigger_reason
@@ -408,7 +438,11 @@ class TripService:
                     *(item for item in alternatives if item.plan_id != proposal.plan_id),
                 ]
 
-        conditional_codes = {"STATION_BUSY", "UNVERIFIED_STATION_DATA"}
+        conditional_codes = {
+            "STATION_BUSY",
+            "UNVERIFIED_STATION_DATA",
+            "ENVIRONMENT_DATA_FALLBACK",
+        }
         if state.get("recovery_mode") or conditional_codes.intersection(
             proposal.risk_assessment.reason_codes
         ):
@@ -448,6 +482,16 @@ class TripService:
                             lng=stop.lon,
                         )
                     )
+            now = datetime.now(UTC)
+            self._persist_plan_group(
+                trip=trip,
+                assumptions=assumptions,
+                alternatives=alternatives,
+                status="CONDITIONAL",
+                now=now,
+            )
+            if hasattr(self._repository, "update_trip_status"):
+                self._repository.update_trip_status(trip.id, "PLANNED")
             return ConditionalPlanResponse(
                 trip_id=trip.id,
                 plan=proposal,
@@ -456,30 +500,19 @@ class TripService:
                 summary=(
                     "Đã tìm được hành trình vượt Safety Gate, nhưng cần xác nhận dữ liệu trạm trước khi dùng."
                 ),
-                created_at=datetime.now(UTC),
+                created_at=now,
             )
-
-        # Calculate next version number
-        existing_versions = (
-            self._repository.get_plan_versions(trip_id) if hasattr(self._repository, "get_plan_versions") else []
-        )
-        version_num = len(existing_versions) + 1
-        for alternative in alternatives:
-            alternative.version = version_num
 
         now = datetime.now(UTC)
-        if hasattr(self._repository, "save_plan_version"):
-            record = PlanVersionRecord(
-                id=proposal.plan_id,
-                trip_id=trip.id,
-                version=version_num,
-                status="PENDING",
-                assumptions_json=json.dumps(assumptions.model_dump(mode="json")),
-                proposal_json=json.dumps(proposal.model_dump(mode="json")),
-                created_at=now,
-                updated_at=now,
-            )
-            self._repository.save_plan_version(record)
+        self._persist_plan_group(
+            trip=trip,
+            assumptions=assumptions,
+            alternatives=alternatives,
+            status="PENDING",
+            now=now,
+        )
+        if hasattr(self._repository, "update_trip_status"):
+            self._repository.update_trip_status(trip.id, "PLANNED")
 
         return PlanCreatedResponse(
             trip_id=trip.id,
@@ -488,8 +521,54 @@ class TripService:
             created_at=now,
         )
 
+    def _persist_plan_group(
+        self,
+        *,
+        trip,
+        assumptions: AssumptionSnapshot,
+        alternatives,
+        status: str,
+        now: datetime,
+    ) -> None:
+        from src.packages.core.trips.domain.entities import PlanVersionRecord
+
+        records = []
+        for index, alternative in enumerate(alternatives, start=1):
+            alternative.status = status
+            alternative.alternative_rank = index
+            records.append(
+                PlanVersionRecord(
+                    id=alternative.plan_id,
+                    trip_id=trip.id,
+                    version=0,
+                    status=status,
+                    assumptions_json=json.dumps(assumptions.model_dump(mode="json")),
+                    proposal_json=json.dumps(alternative.model_dump(mode="json")),
+                    created_at=now,
+                    updated_at=now,
+                    rank=index,
+                    strategy=alternative.strategy,
+                    is_primary=index == 1,
+                )
+            )
+        if hasattr(self._repository, "save_plan_group"):
+            version = self._repository.save_plan_group(records)
+        else:
+            existing = self._repository.get_plan_versions(trip.id)
+            version = max((record.version for record in existing), default=0) + 1
+            for record in records:
+                self._repository.save_plan_version(
+                    PlanVersionRecord(**{**record.__dict__, "version": version})
+                )
+        for alternative in alternatives:
+            alternative.version = version
+
     def get_trip_plans(self, trip_id: str, owner_id: str):
-        from src.packages.contracts.trips import PlanListResponse, PlanProposal
+        from src.packages.contracts.trips import (
+            PlanListResponse,
+            PlanProposal,
+            PlanVersionSummary,
+        )
 
         trip = self._repository.get_trip(trip_id)
         if trip is None:
@@ -502,13 +581,197 @@ class TripService:
 
         records = self._repository.get_plan_versions(trip_id)
         proposals: list[PlanProposal] = []
+        history: list[PlanVersionSummary] = []
         for r in records:
+            if not r.is_primary:
+                continue
             if r.proposal_json:
                 data = json.loads(r.proposal_json)
                 data["status"] = r.status
-                proposals.append(PlanProposal.model_validate(data))
+                data["decision_reason"] = r.decision_reason
+                proposal = PlanProposal.model_validate(data)
+                proposals.append(proposal)
+                history.append(PlanVersionSummary(
+                    id=r.id,
+                    version=r.version,
+                    version_number=r.version,
+                    status=r.status,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                    total_distance_km=proposal.route.distance_km,
+                    total_duration_min=proposal.route.duration_min,
+                    stop_count=len(proposal.charging_stops),
+                    risk_level=proposal.risk_assessment.level,
+                    trigger_reason=proposal.trigger_reason or ("INITIAL" if r.version == 1 else "REPLAN"),
+                    decision_reason=r.decision_reason,
+                ))
 
-        return PlanListResponse(trip_id=trip_id, plans=proposals)
+        return PlanListResponse(trip_id=trip_id, plans=proposals, history=history)
+
+    def confirm_plan(
+        self, plan_id: str, owner_id: str, expected_version: int,
+        ip_address: str | None = None,
+    ):
+        from src.packages.contracts.trips import PlanDecisionResponse, PlanProposal
+
+        record = self._repository.get_plan_version_by_id(plan_id)
+        if record is None:
+            raise NotFoundError("Plan")
+        trip = self._repository.get_trip(record.trip_id)
+        if trip is None:
+            raise NotFoundError("Trip")
+        if trip.owner_id != owner_id:
+            raise ForbiddenError()
+        versions = self._repository.get_plan_versions(record.trip_id)
+        if not versions or versions[-1].version != record.version:
+            raise AppError(
+                "VERSION_CONFLICT", 409,
+                "A newer plan version is already available.",
+                {"plan_version": record.version, "latest_version": versions[-1].version},
+            )
+        if record.version != expected_version:
+            raise AppError(
+                "VERSION_CONFLICT", 409,
+                "Plan version changed before confirmation.",
+                {"expected_version": expected_version, "actual_version": record.version},
+            )
+        if not self._repository.set_plan_status(
+            record.trip_id,
+            record.version,
+            "CONFIRMED",
+            plan_id=plan_id,
+        ):
+            raise AppError(
+                "VERSION_CONFLICT", 409,
+                "Plan is no longer pending.",
+                {"plan_version": record.version},
+            )
+        updated_record = self._repository.get_plan_version_by_id(plan_id)
+        if updated_record is None or not updated_record.proposal_json:
+            raise NotFoundError("Plan")
+        proposal_data = json.loads(updated_record.proposal_json)
+        proposal_data["status"] = updated_record.status
+        proposal = PlanProposal.model_validate(proposal_data)
+        return PlanDecisionResponse(
+            plan=proposal,
+            trip=self.get_trip(record.trip_id, owner_id),
+            action="CONFIRMED",
+        )
+
+    def get_plan(self, plan_id: str, owner_id: str):
+        from src.packages.contracts.trips import PlanDetailResponse, PlanProposal
+
+        record = self._repository.get_plan_version_by_id(plan_id)
+        if record is None or not record.proposal_json:
+            raise NotFoundError("Plan")
+        trip = self._repository.get_trip(record.trip_id)
+        if trip is None:
+            raise NotFoundError("Trip")
+        if trip.owner_id != owner_id:
+            raise ForbiddenError()
+        proposal_data = json.loads(record.proposal_json)
+        proposal_data["status"] = record.status
+        proposal_data["decision_reason"] = record.decision_reason
+        return PlanDetailResponse(plan=PlanProposal.model_validate(proposal_data))
+
+    def reject_plan(
+        self, plan_id: str, owner_id: str, expected_version: int, reason: str,
+    ):
+        from src.packages.contracts.trips import PlanDecisionResponse, PlanProposal
+
+        record = self._repository.get_plan_version_by_id(plan_id)
+        if record is None:
+            raise NotFoundError("Plan")
+        trip = self._repository.get_trip(record.trip_id)
+        if trip is None:
+            raise NotFoundError("Trip")
+        if trip.owner_id != owner_id:
+            raise ForbiddenError()
+        versions = self._repository.get_plan_versions(record.trip_id)
+        if record.version != expected_version or not versions or versions[-1].version != record.version:
+            raise AppError(
+                "VERSION_CONFLICT", 409,
+                "Plan version changed before rejection.",
+                {"expected_version": expected_version, "actual_version": record.version},
+            )
+        if not self._repository.set_plan_status(
+            record.trip_id,
+            record.version,
+            "REJECTED",
+            reason,
+            plan_id=plan_id,
+        ):
+            raise AppError(
+                "VERSION_CONFLICT", 409,
+                "Plan is no longer pending.",
+                {"plan_version": record.version},
+            )
+        updated_record = self._repository.get_plan_version_by_id(plan_id)
+        if updated_record is None or not updated_record.proposal_json:
+            raise NotFoundError("Plan")
+        proposal_data = json.loads(updated_record.proposal_json)
+        proposal_data["status"] = updated_record.status
+        proposal_data["decision_reason"] = updated_record.decision_reason
+        return PlanDecisionResponse(
+            plan=PlanProposal.model_validate(proposal_data),
+            trip=self.get_trip(record.trip_id, owner_id),
+            action="REJECTED",
+        )
+
+    def list_trip_history(self, owner_id: str):
+        from src.packages.contracts.trips import (
+            InitialSocResponse,
+            PlanProposal,
+            TripHistoryItem,
+            TripHistoryResponse,
+            TripLocationResponse,
+        )
+
+        items: list[TripHistoryItem] = []
+        for trip in self._repository.list_trips_by_owner(owner_id):
+            if trip.confirmed_plan_version is None:
+                continue
+            record = next((
+                item for item in self._repository.get_plan_versions(trip.id)
+                if item.version == trip.confirmed_plan_version and item.status == "CONFIRMED"
+            ), None)
+            if record is None or not record.proposal_json:
+                continue
+            proposal_data = json.loads(record.proposal_json)
+            proposal_data["status"] = record.status
+            selected_plan = PlanProposal.model_validate(proposal_data)
+            selected_soc = (
+                selected_plan.soc_points[0].soc_percent
+                if selected_plan.soc_points else trip.initial_soc_percent
+            )
+            items.append(TripHistoryItem(
+                trip_id=trip.id,
+                status=trip.status,
+                origin=TripLocationResponse(
+                    address=trip.origin_address,
+                    lat=trip.origin_lat,
+                    lng=trip.origin_lng,
+                    source_type=trip.origin_source_type,
+                ),
+                destination=TripLocationResponse(
+                    address=trip.destination_address,
+                    lat=trip.destination_lat,
+                    lng=trip.destination_lng,
+                    source_type=trip.destination_source_type,
+                ),
+                initial_soc=InitialSocResponse(
+                    value_percent=selected_soc,
+                    source_type=(
+                        "SIMULATED"
+                        if selected_plan.trigger_reason == "F4_REPLAN"
+                        else trip.soc_source_type
+                    ),
+                ),
+                selected_plan=selected_plan,
+                selected_at=record.updated_at,
+                created_at=trip.created_at,
+            ))
+        return TripHistoryResponse(trips=items)
 
     def stale_pending_plan(self, trip_id: str, owner_id: str, version: int) -> bool:
         trip = self._repository.get_trip(trip_id)

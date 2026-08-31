@@ -250,12 +250,29 @@ class RiskAssessment(BaseModel):
     risk_score: float = Field(default=0.0, ge=0, le=100)
 
 
+class ExplanationReference(BaseModel):
+    entity_type: Literal["STATION", "ROUTE", "ENERGY"]
+    entity_id: str
+    metric_name: str
+    metric_value: float | str
+
+
+ExplanationReferences = ExplanationReference
+
+
+class ExplanationPayload(BaseModel):
+    summary_text: str
+    selected_station_reasons: dict[str, str] = Field(default_factory=dict)
+    rejected_station_reasons: dict[str, str] = Field(default_factory=dict)
+    references: list[ExplanationReference] = Field(default_factory=list)
+
+
 class PlanProposal(BaseModel):
     plan_id: str
     trip_id: str
     version: int = 1
     status: Literal[
-        "PENDING", "CONFIRMED", "REJECTED", "SUPERSEDED",
+        "PENDING", "CONDITIONAL", "CONFIRMED", "REJECTED", "SUPERSEDED",
         "STALE_BY_NEW_CONTEXT", "INVALIDATED_BY_SAFETY",
     ] = "PENDING"
     route: RouteGeometry
@@ -272,7 +289,9 @@ class PlanProposal(BaseModel):
     strategy: Literal["BALANCED", "FASTEST", "SAFEST"] = "BALANCED"
     selection_reason: str = ""
     explanation_source: Literal["DETERMINISTIC", "OPENAI"] = "DETERMINISTIC"
+    explanation: ExplanationPayload | None = None
     trigger_reason: str | None = None
+    decision_reason: str | None = None
     created_at: datetime
 
 
@@ -285,13 +304,23 @@ class PlanCreatedResponse(BaseModel):
 
 
 class NoFeasiblePlan(BaseModel):
-    outcome: Literal["INFEASIBLE"] = "INFEASIBLE"
+    outcome: Literal["PROVEN_INFEASIBLE"] = "PROVEN_INFEASIBLE"
     trip_id: str
     risk_assessment: RiskAssessment
     assumptions: AssumptionSnapshot
     charging_stops: list[ChargingStopProposal] = Field(default_factory=list, max_length=0)
     summary: str
     minimum_initial_soc_percent: float | None = Field(default=None, ge=0, le=100)
+    direct_route_distance_km: float | None = Field(default=None, ge=0)
+    estimated_reachable_distance_km: float | None = Field(default=None, ge=0)
+    estimated_energy_required_kwh: float | None = Field(default=None, ge=0)
+    available_energy_before_reserve_kwh: float | None = Field(default=None, ge=0)
+    energy_shortfall_kwh: float | None = Field(default=None, ge=0)
+    estimated_minimum_charging_stops: int | None = Field(default=None, ge=0)
+    vehicle_profile_name: str | None = None
+    usable_battery_kwh: float | None = Field(default=None, ge=0)
+    nearest_candidate_station_name: str | None = None
+    nearest_candidate_station_distance_km: float | None = Field(default=None, ge=0)
     evaluated_station_count: int = Field(default=0, ge=0)
     suggestions: list[str] = Field(default_factory=list)
     search_scope: str = "ON_ROUTE_AND_BACKTRACK"
@@ -327,6 +356,7 @@ class ActionRequiredResponse(BaseModel):
     provider: str = ""
     provider_status: str | None = None
     http_status: int | None = Field(default=None, ge=400, le=599)
+    retry_after_seconds: float | None = Field(default=None, ge=0)
     recovery_options: list[RecoveryOption] = Field(default_factory=list)
     created_at: datetime
 
@@ -335,15 +365,39 @@ PlanningRecoveryResponse = ConditionalPlanResponse | ActionRequiredResponse
 PlanGenerationResponse = PlanCreatedResponse | NoFeasiblePlan | PlanningRecoveryResponse
 
 
+class PlanVersionSummary(BaseModel):
+    id: str
+    version: int
+    version_number: int | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    total_distance_km: float = 0.0
+    total_duration_min: float = 0.0
+    stop_count: int = 0
+    risk_level: str = ""
+    trigger_reason: str = ""
+    decision_reason: str | None = None
+
+
 class PlanListResponse(BaseModel):
     trip_id: str
     plans: list[PlanProposal]
+    history: list[PlanVersionSummary] = Field(default_factory=list)
+
+
+class PlanRejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=2000)
 
 
 class PlanDecisionResponse(BaseModel):
     plan: PlanProposal
     trip: TripDetailResponse
     action: Literal["CONFIRMED", "REJECTED"]
+
+
+class PlanDetailResponse(BaseModel):
+    plan: PlanProposal
 
 
 class TripHistoryItem(BaseModel):

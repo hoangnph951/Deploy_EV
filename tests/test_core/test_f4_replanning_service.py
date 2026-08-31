@@ -87,6 +87,51 @@ def test_multi_event_run_builds_at_most_one_candidate_with_blacklist() -> None:
     assert outcome.reflection.next_step == "PROPOSE_ACTION"
 
 
+def test_route_soc_and_station_events_share_one_epoch_and_one_candidate() -> None:
+    planner = RecordingPlanner()
+
+    outcome = ReplanningService(planner=planner).process(
+        previous_context=context(),
+        telemetry=telemetry(),
+        events=[
+            event("event-route", "ROUTE_DEVIATION"),
+            event("event-soc", "SOC_UNDERPERFORMANCE"),
+            event("event-station", "STATION_UNAVAILABLE", ["ST-10"]),
+        ],
+    )
+
+    assert outcome.epoch.event_ids == [
+        "event-route",
+        "event-soc",
+        "event-station",
+    ]
+    assert outcome.context.unresolved_constraints.route_deviation_active is True
+    assert outcome.context.unresolved_constraints.soc_underperformance_active is True
+    assert outcome.context.unresolved_constraints.excluded_station_ids == ["ST-10"]
+    assert len(planner.calls) == 1
+    assert outcome.candidate is not None
+
+
+def test_stale_telemetry_blocks_planning_when_other_events_share_the_epoch() -> None:
+    planner = RecordingPlanner()
+    stale = telemetry().model_copy(update={"freshness": "STALE", "age_seconds": 61})
+
+    outcome = ReplanningService(planner=planner).process(
+        previous_context=context(),
+        telemetry=stale,
+        events=[
+            event("event-stale", "STALE_TELEMETRY"),
+            event("event-route", "ROUTE_DEVIATION"),
+        ],
+    )
+
+    assert set(outcome.epoch.event_ids) == {"event-stale", "event-route"}
+    assert outcome.context.unresolved_constraints.telemetry_blocked is True
+    assert outcome.action.action == "REQUEST_NEW_TELEMETRY"
+    assert outcome.candidate is None
+    assert planner.calls == []
+
+
 def test_station_no_longer_in_remaining_trip_continues_current_plan() -> None:
     planner = RecordingPlanner(projection={
         "remaining_station_ids": ["ST-20"],
@@ -201,6 +246,7 @@ def test_service_uses_supervisor_action_draft_after_deterministic_feasibility() 
         user_message="Phương án mới cần được xác nhận sau khi kiểm tra điều kiện.",
         limitations=["Điều kiện thử nghiệm"],
         requires_owner_confirmation=True,
+        response_source="OPENAI",
     ))
 
     outcome = ReplanningService(
@@ -213,6 +259,10 @@ def test_service_uses_supervisor_action_draft_after_deterministic_feasibility() 
     assert supervisor.draft_calls == 1
     assert outcome.action.action == "PROPOSE_CONDITIONAL_REPLAN"
     assert outcome.action.reason_codes == ["AGENT_SELECTED_CONDITIONAL_REPLAN"]
+    proposing_trace = next(
+        item for item in outcome.decision_trace if item.stage == "PROPOSING_ACTION"
+    )
+    assert proposing_trace.response_source == "OPENAI"
 
 
 def test_service_falls_back_when_supervisor_action_draft_breaks_safety_guard() -> None:

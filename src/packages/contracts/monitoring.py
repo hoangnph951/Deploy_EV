@@ -15,7 +15,9 @@ EventType = Literal[
     "STATION_UNAVAILABLE",
     "STALE_TELEMETRY",
 ]
-SimulationStatus = Literal["IDLE", "RUNNING", "AWAITING_DECISION", "COMPLETED", "STOPPED"]
+SimulationStatus = Literal[
+    "IDLE", "RUNNING", "PAUSED", "AWAITING_DECISION", "COMPLETED", "STOPPED",
+]
 
 
 class MonitoringThresholds(BaseModel):
@@ -32,9 +34,21 @@ class SimulatorStartRequest(BaseModel):
     speed_multiplier: float | None = Field(default=None, gt=0, le=100)
     scenario: Literal[
         "RANDOM", "NORMAL", "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE",
-        "STATION_UNAVAILABLE", "STALE_TELEMETRY",
+        "STATION_UNAVAILABLE", "STALE_TELEMETRY", "MULTI_EVENT",
     ] = "RANDOM"
+    scenario_value: float | None = Field(default=None, ge=0, le=3600)
+    scenario_events: list[Literal[
+        "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STATION_UNAVAILABLE",
+    ]] = Field(default_factory=list, min_length=0, max_length=3)
     unhappy_probability: float = Field(default=0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_multi_event_selection(self):
+        if self.scenario != "MULTI_EVENT" or not self.scenario_events:
+            return self
+        if len(self.scenario_events) not in (2, 3) or len(set(self.scenario_events)) != len(self.scenario_events):
+            raise ValueError("MULTI_EVENT requires two or three distinct events")
+        return self
 
 
 class SimulationDecisionRequest(BaseModel):

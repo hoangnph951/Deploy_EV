@@ -48,6 +48,179 @@ def test_thresholds_are_strictly_greater_than_proposal_values():
     assert evaluator.classify(silent_seconds=61) == "STALE_TELEMETRY"
 
 
+def _scenario_session(scenario: str, scenario_value: float):
+    def point(distance_km, soc_percent, kind):
+        return SimpleNamespace(
+            distance_km=distance_km,
+            soc_percent=soc_percent,
+            kind=kind,
+            model_dump=lambda mode: {
+                "distance_km": distance_km,
+                "soc_percent": soc_percent,
+                "kind": kind,
+            },
+        )
+
+    return SimpleNamespace(
+        trip_id="trip-1",
+        plan=SimpleNamespace(
+            plan_id="plan-1",
+            version=1,
+            route=SimpleNamespace(
+                distance_km=10.0,
+                polyline=[[21.0, 105.0], [21.0, 105.1]],
+            ),
+            soc_points=[
+                point(0.0, 80.0, "ORIGIN"),
+                point(10.0, 60.0, "DESTINATION"),
+            ],
+            final_arrival_soc_percent=60.0,
+            charging_stops=[],
+        ),
+        request=SimulatorStartRequest(
+            plan_id="plan-1",
+            scenario=scenario,
+            scenario_value=scenario_value,
+            speed_multiplier=100,
+        ),
+        scenario=scenario,
+        status="RUNNING",
+        tick_count=0,
+        distance_km=0.0,
+        telemetry=None,
+        events=[],
+        unavailable_station_ids=[],
+        replan_required=False,
+        anomaly_emitted=False,
+        speed_multiplier=100.0,
+        estimated_duration_seconds=2,
+        soc_risk=SOCRiskState.empty(),
+    )
+
+
+@pytest.mark.parametrize(
+    ("scenario", "value", "expected_event"),
+    [
+        ("ROUTE_DEVIATION", 1.99, None),
+        ("ROUTE_DEVIATION", 2.00, None),
+        ("ROUTE_DEVIATION", 2.01, "ROUTE_DEVIATION"),
+        ("SOC_UNDERPERFORMANCE", 4.9, None),
+        ("SOC_UNDERPERFORMANCE", 5.0, None),
+        ("SOC_UNDERPERFORMANCE", 5.1, "SOC_UNDERPERFORMANCE"),
+        ("STALE_TELEMETRY", 60.0, None),
+        ("STALE_TELEMETRY", 61.0, "STALE_TELEMETRY"),
+    ],
+)
+def test_simulator_injects_the_exact_requested_boundary_value(
+    scenario, value, expected_event,
+):
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session(scenario, value)
+    service._sessions[session.trip_id] = session
+
+    state = service.tick("trip-1", "owner-1")
+
+    if scenario == "ROUTE_DEVIATION":
+        assert state.telemetry.distance_to_route_km == pytest.approx(value)
+    elif scenario == "SOC_UNDERPERFORMANCE":
+        assert state.telemetry.expected_soc_percent - state.telemetry.soc_percent == pytest.approx(value)
+    else:
+        assert state.telemetry.age_seconds == pytest.approx(value)
+    assert [event.event_type for event in state.events] == (
+        [expected_event] if expected_event else []
+    )
+
+
+def test_simulator_can_pause_resume_and_reset_the_same_scenario():
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session("ROUTE_DEVIATION", 2.01)
+    service._sessions[session.trip_id] = session
+
+    paused = service.pause("trip-1", "owner-1")
+    unchanged = service.tick("trip-1", "owner-1")
+    resumed = service.resume("trip-1", "owner-1")
+    advanced = service.tick("trip-1", "owner-1")
+    reset = service.reset("trip-1", "owner-1")
+
+    assert paused.status == "PAUSED"
+    assert unchanged.tick_count == 0
+    assert resumed.status == "RUNNING"
+    assert advanced.tick_count == 1
+    assert advanced.events[0].event_type == "ROUTE_DEVIATION"
+    assert reset.status == "RUNNING"
+    assert reset.tick_count == 0
+    assert reset.telemetry is None
+    assert reset.events == []
+    assert reset.selected_scenario == "ROUTE_DEVIATION"
+    assert service._sessions["trip-1"].request.scenario_value == 2.01
+
+
+def test_multi_event_scenario_emits_route_soc_and_station_on_one_snapshot():
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session("MULTI_EVENT", 0)
+    session.plan.charging_stops = [SimpleNamespace(
+        station_id="ST-10",
+        name="Station 10",
+        distance_from_origin_km=8.0,
+    )]
+    service._sessions[session.trip_id] = session
+
+    state = service.tick("trip-1", "owner-1")
+
+    assert [event.event_type for event in state.events] == [
+        "ROUTE_DEVIATION",
+        "SOC_UNDERPERFORMANCE",
+        "STATION_UNAVAILABLE",
+    ]
+    assert state.telemetry.snapshot_id
+    assert {event.telemetry_snapshot_id for event in state.events} == {
+        state.telemetry.snapshot_id
+    }
+    assert {event.tick for event in state.events} == {state.tick_count}
+    assert state.unavailable_station_ids == ["ST-10"]
+    assert state.status == "AWAITING_DECISION"
+
+
+def test_multi_event_scenario_emits_only_the_two_selected_events():
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session("MULTI_EVENT", 0)
+    session.request = session.request.model_copy(update={
+        "scenario_events": ["SOC_UNDERPERFORMANCE", "STATION_UNAVAILABLE"],
+    })
+    session.plan.charging_stops = [SimpleNamespace(
+        station_id="ST-10",
+        name="Station 10",
+        distance_from_origin_km=8.0,
+    )]
+    service._sessions[session.trip_id] = session
+
+    state = service.tick("trip-1", "owner-1")
+
+    assert [event.event_type for event in state.events] == [
+        "SOC_UNDERPERFORMANCE",
+        "STATION_UNAVAILABLE",
+    ]
+    assert {event.telemetry_snapshot_id for event in state.events} == {
+        state.telemetry.snapshot_id
+    }
+
+
+@pytest.mark.parametrize(
+    "scenario_events",
+    [
+        ["ROUTE_DEVIATION"],
+        ["ROUTE_DEVIATION", "ROUTE_DEVIATION"],
+    ],
+)
+def test_multi_event_request_requires_two_distinct_events(scenario_events):
+    with pytest.raises(ValueError, match="two or three distinct events"):
+        SimulatorStartRequest(
+            plan_id="plan-1",
+            scenario="MULTI_EVENT",
+            scenario_events=scenario_events,
+        )
+
+
 def test_station_unavailable_is_explicit_simulator_event():
     assert MonitoringEvaluator().classify(station_unavailable=True) == "STATION_UNAVAILABLE"
 

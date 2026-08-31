@@ -28,6 +28,7 @@ class ModelOrderedSupervisor(ConservativeSupervisor):
                 evidence_sufficient=True,
                 hypothesis_status="SUPPORTED",
                 next_step="PROPOSE_ACTION",
+                response_source="OPENAI",
                 public_summary="Đã đủ bằng chứng.",
             )
         preferred_order = [
@@ -44,6 +45,7 @@ class ModelOrderedSupervisor(ConservativeSupervisor):
             hypothesis_status="UNCERTAIN",
             next_step="CALL_TOOL",
             next_tool=selected,
+            response_source="OPENAI",
             public_summary=f"Chọn {selected} từ allowlist.",
         )
 
@@ -98,6 +100,11 @@ def test_supervisor_selects_tool_order_from_the_allowed_runtime_set() -> None:
         "build_minimal_substitution",
         "compare_plans",
     ]
+    assert all(
+        item.response_source == "OPENAI"
+        for item in outcome.decision_trace
+        if item.stage == "REFLECTING"
+    )
 
 
 def test_invalid_ai_tool_choice_fails_closed_without_local_replacement() -> None:

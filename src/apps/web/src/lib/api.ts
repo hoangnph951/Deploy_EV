@@ -17,6 +17,7 @@ import type {
   SimulationState,
   PlanDecisionResponse,
   ReplanningPlanDecisionResponse,
+  ReplanningContextResponse,
   TripHistoryResponse,
   SimulationCatalog,
   SimulationRun,
@@ -139,18 +140,22 @@ export async function createTripPlan(tripId: string): Promise<PlanGenerationResp
 export async function createTripPlanStream(
   tripId: string,
   onProgress: (message: string) => void,
+  signal?: AbortSignal,
 ): Promise<PlanGenerationResponse> {
   const controller = new AbortController();
+  const cancelFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", cancelFromCaller, { once: true });
+  try {
   let response: Response;
   try {
     response = await withPlanningStreamTimeout(fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/plans/stream`, {
       method: "POST",
       headers: authenticatedHeaders({ Accept: "text/event-stream" }),
       signal: controller.signal,
-    }), 60_000);
+    }), 60_000, controller.signal);
   } catch (error) {
     controller.abort();
-    throw error;
+    throw signal?.aborted ? new Error("Đã hủy yêu cầu lập kế hoạch.") : error;
   }
   if (!response.ok || !response.body) return createTripPlan(tripId);
   const reader = response.body.getReader();
@@ -160,11 +165,11 @@ export async function createTripPlanStream(
   while (true) {
     let chunk: ReadableStreamReadResult<Uint8Array>;
     try {
-      chunk = await withPlanningStreamTimeout(reader.read(), 60_000);
+      chunk = await withPlanningStreamTimeout(reader.read(), 60_000, controller.signal);
     } catch (error) {
       controller.abort();
       void reader.cancel();
-      throw error;
+      throw signal?.aborted ? new Error("Đã hủy yêu cầu lập kế hoạch.") : error;
     }
     if (chunk.done) break;
     buffer += decoder.decode(chunk.value, { stream: true });
@@ -181,6 +186,9 @@ export async function createTripPlanStream(
   }
   if (!result) throw new Error("Backend không trả về kết quả lập kế hoạch.");
   return result;
+  } finally {
+    signal?.removeEventListener("abort", cancelFromCaller);
+  }
 }
 
 export async function getTripPlans(tripId: string): Promise<PlanListResponse> {
@@ -202,6 +210,29 @@ export async function confirmTripPlan(planId: string, version: number): Promise<
     headers: authenticatedHeaders({ "If-Match": String(version) }),
   });
   return parseApiResponse<PlanDecisionResponse>(response);
+}
+
+export async function rejectTripPlan(
+  planId: string,
+  version: number,
+  reason: string,
+): Promise<PlanDecisionResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/plans/${planId}/reject`, {
+    method: "POST",
+    headers: authenticatedHeaders({
+      "Content-Type": "application/json",
+      "If-Match": String(version),
+    }),
+    body: JSON.stringify({ reason }),
+  });
+  return parseApiResponse<PlanDecisionResponse>(response);
+}
+
+export async function getReplanningContext(tripId: string): Promise<ReplanningContextResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/context`, {
+    headers: authenticatedHeaders(),
+  });
+  return parseApiResponse<ReplanningContextResponse>(response);
 }
 
 export async function listTripHistory(): Promise<TripHistoryResponse> {
@@ -248,22 +279,30 @@ export async function replanTrip(tripId: string, state: SimulationState): Promis
 export async function submitF4Replan(
   tripId: string,
   state: SimulationState,
-  canonicalEvent?: SimulationState["events"][number],
+  canonicalEvents?: SimulationState["events"],
   onTrace?: (trace: import("./types").ReplanningOutcome["decision_trace"][number]) => void,
 ): Promise<import("./types").ReplanningOutcome> {
   if (!state.telemetry || state.events.length === 0) throw new Error("Chưa có event và telemetry để F4 đánh giá.");
   const telemetryId = state.telemetry.snapshot_id ?? `sim-${state.tick_count}`;
-  const response = await fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/replans/stream`, {
-    method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      telemetry: { ...state.telemetry, snapshot_id: telemetryId },
-      events: (canonicalEvent ? [canonicalEvent] : state.events).map((event) => ({
-        ...event,
-        telemetry_snapshot_id: event.telemetry_snapshot_id ?? telemetryId,
-        related_plan_version: event.related_plan_version ?? 0,
-      })),
-    }),
-  });
+  const controller = new AbortController();
+  let response: Response;
+  try {
+    response = await withPlanningStreamTimeout(fetch(`${API_BASE_URL}/api/v1/trips/${tripId}/replans/stream`, {
+      method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
+      signal: controller.signal,
+      body: JSON.stringify({
+        telemetry: { ...state.telemetry, snapshot_id: telemetryId },
+        events: (canonicalEvents?.length ? canonicalEvents : state.events).map((event) => ({
+          ...event,
+          telemetry_snapshot_id: event.telemetry_snapshot_id ?? telemetryId,
+          related_plan_version: event.related_plan_version ?? 0,
+        })),
+      }),
+    }), 60_000, controller.signal);
+  } catch (error) {
+    controller.abort();
+    throw error;
+  }
   if (!response.ok) return parseApiResponse<import("./types").ReplanningOutcome>(response);
   if (!response.body) throw new Error("Máy chủ không mở được luồng phân tích trực tiếp.");
   const reader = response.body.getReader();
@@ -271,7 +310,15 @@ export async function submitF4Replan(
   let buffer = "";
   let outcome: import("./types").ReplanningOutcome | null = null;
   while (true) {
-    const { done, value } = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await withPlanningStreamTimeout(reader.read(), 60_000, controller.signal);
+    } catch (error) {
+      controller.abort();
+      void reader.cancel();
+      throw error;
+    }
+    const { done, value } = chunk;
     buffer += decoder.decode(value, { stream: !done });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
@@ -329,10 +376,31 @@ export async function startSimulation(
   tripId: string,
   plan: import("./types").PlanProposal,
   scenario: SimulationScenarioSelection = "NORMAL",
+  scenarioValue?: number,
+  scenarioEvents?: import("./types").CompositeMonitoringEventType[],
 ): Promise<SimulationState> {
   const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/start`, {
     method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ plan_id: plan.plan_id, plan, seed: Date.now(), scenario, unhappy_probability: 0.5 }),
+    body: JSON.stringify({
+      plan_id: plan.plan_id,
+      plan,
+      seed: Date.now(),
+      scenario,
+      scenario_value: scenarioValue,
+      scenario_events: scenarioEvents,
+      unhappy_probability: 0.5,
+    }),
+  });
+  return parseApiResponse<SimulationState>(response);
+}
+
+export async function controlMonitoringSimulation(
+  tripId: string,
+  operation: "pause" | "resume" | "reset",
+): Promise<SimulationState> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/${operation}`, {
+    method: "POST",
+    headers: authenticatedHeaders(),
   });
   return parseApiResponse<SimulationState>(response);
 }

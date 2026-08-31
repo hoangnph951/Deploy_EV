@@ -42,6 +42,24 @@ export const labelHypothesis = label;
 export const labelAction = label;
 export const labelTool = label;
 
+export type TraceResponseSource = "OPENAI" | "SAFE_FALLBACK" | "DETERMINISTIC";
+
+export function labelTraceKind(stage: string, responseSource: TraceResponseSource): string {
+  if (stage === "REFLECTING") {
+    return responseSource === "OPENAI"
+      ? "Phản ánh của GPT"
+      : responseSource === "SAFE_FALLBACK"
+        ? "Phản hồi an toàn dự phòng"
+        : "Phản ánh của hệ thống";
+  }
+  if (stage === "DIAGNOSING") return "Quan sát từ công cụ";
+  if (stage === "PROPOSING_ACTION" && responseSource === "OPENAI") return "Đề xuất của GPT";
+  if (stage === "PROPOSING_ACTION" && responseSource === "SAFE_FALLBACK") {
+    return "Đề xuất an toàn dự phòng";
+  }
+  return "Bước điều phối";
+}
+
 export function labelObjective(code: string): string {
   const objectives: Record<string, string> = {
     RESTORE_SAFE_ROUTE: "Khôi phục lộ trình an toàn",

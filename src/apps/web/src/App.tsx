@@ -1,31 +1,38 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { DataTrustPanel, ProposalSummary, VehicleSpecs, WhyThisPlan } from "./components/DashboardPanels";
 import { AuthPage } from "./components/AuthPage";
 import { GoongPlaceInput } from "./components/GoongPlaceInput";
+import { PlanConfirmationBar, PlanHistoryTimeline } from "./components/Feature2Panels";
 import { InfeasibleWarningBanner } from "./components/InfeasibleWarningBanner";
 import { RecoveryPanel } from "./components/RecoveryPanel";
 import { SocChart } from "./components/SocChart";
 import { TripPlanMap } from "./components/TripPlanMap";
 import { TripMonitoringDashboard } from "./components/TripMonitoringDashboard";
+import { TripHistoryPage } from "./components/TripHistoryPage";
 import { VehicleSetup } from "./components/VehicleSetup";
 import {
   ApiError,
   clearAccessToken,
   confirmPlan,
+  confirmTripPlan,
   createTrip,
   createTripPlan,
   createTripPlanStream,
   getAccessToken,
   getCurrentAssumptions,
   getCurrentUser,
+  getReplanningContext,
+  getTripPlans,
   listMyVehicles,
+  listTripHistory,
   listVehicleProfiles,
   logoutAccount,
   rejectReplanningPlan,
+  rejectTripPlan,
   setDefaultVehicle,
   submitF4Replan,
 } from "./lib/api";
@@ -40,11 +47,48 @@ import type {
   PlanningRecoveryResponse,
   RecoveryOption,
   ReplanningOutcome,
+  PlanVersionSummary,
   TripCreatePayload,
   UserVehicle,
   VehicleProfileSnapshot,
   SimulationState,
+  TripHistoryItem,
 } from "./lib/types";
+
+const CURRENT_TRIP_KEY = "ev-route-current-trip-id";
+
+type PlanningFailure = {
+  kind: "CANCELLED" | "INSUFFICIENT_DATA" | "SERVICE_ERROR";
+  title: string;
+  message: string;
+};
+
+function planningFailureFrom(error: unknown): PlanningFailure {
+  const message = error instanceof Error ? error.message : "Không thể lập kế hoạch lúc này.";
+  if (/đã hủy/i.test(message)) {
+    return { kind: "CANCELLED", title: "Đã hủy lập kế hoạch", message: "Bạn có thể thử lại khi sẵn sàng." };
+  }
+  if (/không phản hồi|timeout|timed out|provider|thời tiết|độ cao/i.test(message)) {
+    return {
+      kind: "INSUFFICIENT_DATA",
+      title: "Chưa đủ dữ liệu để lập kế hoạch",
+      message: "Dịch vụ dữ liệu chưa phản hồi trong 60 giây. Đây chưa phải kết luận rằng tuyến không khả thi.",
+    };
+  }
+  return { kind: "SERVICE_ERROR", title: "Không thể hoàn tất lập kế hoạch", message };
+}
+
+function decisionErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && ["PLAN_CONTEXT_CHANGED", "PLAN_NOT_PENDING", "VERSION_CONFLICT"].includes(error.payload.error.code)) {
+    return "Kế hoạch này đã được xử lý ở tab khác hoặc không còn là phiên bản mới nhất. Hãy tải lại dữ liệu trước khi quyết định.";
+  }
+  return error instanceof Error ? error.message : "Không thể lưu quyết định kế hoạch.";
+}
+
+function replanningCandidatePlanId(run: ReplanningOutcome | null): string | null {
+  const outcome = run?.candidate?.outcome;
+  return outcome && "plan" in outcome ? outcome.plan.plan_id : null;
+}
 
 const formSchema = z.object({
   originAddress: z.string().min(1, "Vui lòng nhập điểm xuất phát."),
@@ -115,7 +159,7 @@ function applyResolution(
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"planning" | "tracking">("planning");
+  const [activeTab, setActiveTab] = useState<"planning" | "tracking" | "history">("planning");
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [vehicleProfiles, setVehicleProfiles] = useState<VehicleProfileSnapshot[]>([]);
@@ -134,16 +178,24 @@ export default function App() {
   const [currentTripId, setCurrentTripId] = useState("");
   const [planProposal, setPlanProposal] = useState<PlanProposal | null>(null);
   const [planAlternatives, setPlanAlternatives] = useState<PlanProposal[]>([]);
+  const [planVersions, setPlanVersions] = useState<PlanProposal[]>([]);
   const [resolutionState, setResolutionState] = useState<ResolutionState | null>(null);
   const [originPlace, setOriginPlace] = useState<PlaceSelection | null>(null);
   const [destinationPlace, setDestinationPlace] = useState<PlaceSelection | null>(null);
   const [planningMessage, setPlanningMessage] = useState("");
+  const [planningFailure, setPlanningFailure] = useState<PlanningFailure | null>(null);
   const [simulationState, setSimulationState] = useState<SimulationState | null>(null);
   const [confirmedPlanId, setConfirmedPlanId] = useState("");
   const [confirmedPlanSnapshot, setConfirmedPlanSnapshot] = useState<PlanProposal | null>(null);
   const [planContextVersion, setPlanContextVersion] = useState(1);
   const [confirmingPlan, setConfirmingPlan] = useState(false);
   const [activeReplan, setActiveReplan] = useState<ReplanningOutcome | null>(null);
+  const [planHistory, setPlanHistory] = useState<PlanVersionSummary[]>([]);
+  const [tripHistory, setTripHistory] = useState<TripHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [decisionNotice, setDecisionNotice] = useState("");
+  const planningAbortController = useRef<AbortController | null>(null);
 
   const {
     register,
@@ -190,6 +242,59 @@ export default function App() {
     void bootstrap();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const tripId = localStorage.getItem(CURRENT_TRIP_KEY);
+    if (!tripId) return;
+    let active = true;
+    Promise.all([
+      getTripPlans(tripId),
+      getReplanningContext(tripId).catch(() => null),
+    ]).then(([response, context]) => {
+      if (!active || response.plans.length === 0) return;
+      const newestFirst = [...response.plans].sort((left, right) => right.version - left.version);
+      const pending = newestFirst.find((plan) => plan.status === "PENDING") ?? null;
+      const confirmed = newestFirst.find((plan) => plan.status === "CONFIRMED") ?? null;
+      const visible = pending ?? confirmed ?? newestFirst[0];
+      setCurrentTripId(tripId);
+      setPlanProposal(visible);
+      setPlanAlternatives([visible]);
+      setPlanVersions(response.plans);
+      setPlanHistory(response.history ?? []);
+      setConfirmedPlanSnapshot(confirmed);
+      setConfirmedPlanId(confirmed?.plan_id ?? "");
+      setPlanContextVersion(context?.context_version ?? 1);
+      setDecisionNotice(pending
+        ? `Đã khôi phục PLAN v${pending.version} đang chờ quyết định từ máy chủ.`
+        : `Đã khôi phục PLAN v${visible.version} đang sử dụng từ máy chủ.`);
+    }).catch((error) => {
+      if (error instanceof ApiError && [403, 404].includes(error.status)) {
+        localStorage.removeItem(CURRENT_TRIP_KEY);
+      } else if (active) {
+        setDecisionNotice("Chưa thể khôi phục kế hoạch từ máy chủ. Hãy thử tải lại trang.");
+      }
+    });
+    return () => { active = false; };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (currentTripId) localStorage.setItem(CURRENT_TRIP_KEY, currentTripId);
+  }, [currentTripId]);
+
+  useEffect(() => {
+    if (!currentUser || activeTab !== "history") return;
+    let active = true;
+    setHistoryLoading(true);
+    setHistoryError("");
+    listTripHistory()
+      .then((response) => { if (active) setTripHistory(response.trips); })
+      .catch((error) => {
+        if (active) setHistoryError(error instanceof Error ? error.message : "Không tải được lịch sử chuyến đi.");
+      })
+      .finally(() => { if (active) setHistoryLoading(false); });
+    return () => { active = false; };
+  }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
     if (!selectedVehicle) {
@@ -248,6 +353,7 @@ export default function App() {
   const signOut = async () => {
     try { await logoutAccount(); } finally {
       clearAccessToken();
+      localStorage.removeItem(CURRENT_TRIP_KEY);
       setCurrentUser(null);
       setUserVehicles([]);
       setSelectedVehicleId("");
@@ -256,19 +362,27 @@ export default function App() {
       setConfirmedPlanSnapshot(null);
       setNoFeasiblePlan(null);
       setRecoveryResult(null);
+      setPlanHistory([]);
+      setPlanVersions([]);
+      setTripHistory([]);
     }
   };
 
   const generatePlan = async (tripId: string) => {
+    planningAbortController.current?.abort();
+    const controller = new AbortController();
+    planningAbortController.current = controller;
     setPlanningLoading(true);
     setPlanningMessage("Đang khởi động agent lập kế hoạch…");
     setInlineError("");
+    setPlanningFailure(null);
     try {
-      const response = await createTripPlanStream(tripId, setPlanningMessage);
-      if (response.outcome === "PROVEN_INFEASIBLE") {
+      const response = await createTripPlanStream(tripId, setPlanningMessage, controller.signal);
+      const outcome = response.outcome as string;
+      if (outcome === "PROVEN_INFEASIBLE" || outcome === "INFEASIBLE") {
         setPlanProposal(null);
         setPlanAlternatives([]);
-        setNoFeasiblePlan(response);
+        setNoFeasiblePlan(response as NoFeasiblePlan);
         setRecoveryResult(null);
       } else if (response.outcome === "ACTION_REQUIRED" || response.outcome === "SEARCH_EXHAUSTED") {
         setPlanProposal(null);
@@ -286,28 +400,36 @@ export default function App() {
         setPlanProposal(response.plan);
         setPlanAlternatives(response.alternatives?.length ? response.alternatives : [response.plan]);
       }
+      try {
+        const plans = await getTripPlans(tripId);
+        setPlanHistory(plans.history ?? []);
+        setPlanVersions(plans.plans);
+      } catch {
+        setDecisionNotice("Kế hoạch đã được tạo nhưng chưa thể tải lại danh sách phiên bản.");
+      }
     } catch (error) {
       setPlanningMessage("");
-      setInlineError(
-        error instanceof ApiError
-          ? error.payload.error.message
-          : error instanceof Error
-            ? error.message
-            : "Không thể lập kế hoạch lúc này. Vui lòng thử lại.",
-      );
+      const failure = planningFailureFrom(error);
+      setPlanningFailure(failure);
+      setInlineError("");
     } finally {
+      if (planningAbortController.current === controller) planningAbortController.current = null;
       setPlanningLoading(false);
     }
   };
 
+  const cancelPlanning = () => {
+    planningAbortController.current?.abort();
+  };
+
   const generateReplan = async (
     state: SimulationState,
-    canonicalEvent: SimulationState["events"][number],
+    canonicalEvents: SimulationState["events"],
     onTrace?: (trace: import("./lib/types").ReplanningOutcome["decision_trace"][number]) => void,
   ) => {
     setPlanningLoading(true);
     try {
-      const run = await submitF4Replan(currentTripId, state, canonicalEvent, onTrace);
+      const run = await submitF4Replan(currentTripId, state, canonicalEvents, onTrace);
       setActiveReplan(run);
       setPlanContextVersion(run.context.context_version);
       const response = run.candidate?.outcome;
@@ -324,6 +446,8 @@ export default function App() {
     setSubmitting(true);
     setPlanningMessage("Đang chuẩn bị dữ liệu chuyến đi…");
     setInlineError("");
+    setPlanningFailure(null);
+    setDecisionNotice("");
     setPlanProposal(null);
     setPlanAlternatives([]);
     setNoFeasiblePlan(null);
@@ -332,6 +456,8 @@ export default function App() {
     setConfirmedPlanSnapshot(null);
     setActiveReplan(null);
     setPlanContextVersion(1);
+    setPlanHistory([]);
+    setPlanVersions([]);
     try {
       const response = await createTrip(payload);
       setResolutionState(null);
@@ -359,7 +485,13 @@ export default function App() {
 
   const onSubmit = handleSubmit(async (values) => {
     if (!originPlace || !destinationPlace) {
-      setInlineError("Hãy chọn cả điểm xuất phát và điểm đến từ danh sách gợi ý của Goong.");
+      const field = !originPlace ? "điểm xuất phát" : "điểm đến";
+      const value = !originPlace ? values.originAddress : values.destinationAddress;
+      setInlineError(
+        value.trim()
+          ? `${field[0].toUpperCase()}${field.slice(1)} “${value.trim()}” còn mơ hồ. Hãy nhập rõ tỉnh/thành phố, quận/huyện hoặc địa chỉ cụ thể rồi chọn một kết quả gợi ý.`
+          : `Hãy nhập và chọn ${field} cụ thể từ danh sách gợi ý của Goong.`,
+      );
       return;
     }
     if (!selectedVehicle) {
@@ -422,27 +554,84 @@ export default function App() {
   const confirmSelectedJourney = async (selectedPlan: PlanProposal) => {
     setConfirmingPlan(true);
     setInlineError("");
+    setDecisionNotice("");
     try {
-      const decision = await confirmPlan(
-        currentTripId,
-        selectedPlan.version,
-        planContextVersion,
-      );
+      const isF4Candidate = selectedPlan.trigger_reason === "F4_REPLAN"
+        || replanningCandidatePlanId(activeReplan) === selectedPlan.plan_id;
+      const status = isF4Candidate
+        ? (await confirmPlan(
+            currentTripId,
+            selectedPlan.version,
+            planContextVersion,
+          )).status
+        : (await confirmTripPlan(selectedPlan.plan_id, selectedPlan.version)).plan.status;
       setConfirmedPlanId(selectedPlan.plan_id);
-      const confirmedPlan = { ...selectedPlan, status: decision.status } as PlanProposal;
+      const confirmedPlan = { ...selectedPlan, status } as PlanProposal;
       setPlanProposal(confirmedPlan);
       setConfirmedPlanSnapshot(confirmedPlan);
       setPlanAlternatives((items) => items.map((item) => (
         item.plan_id === selectedPlan.plan_id
-          ? { ...item, status: decision.status }
+          ? { ...item, status }
           : item
       )));
+      const [plansResult, historyResult] = await Promise.allSettled([
+        getTripPlans(currentTripId),
+        listTripHistory(),
+      ]);
+      if (plansResult.status === "fulfilled") {
+        setPlanHistory(plansResult.value.history ?? []);
+        setPlanVersions(plansResult.value.plans);
+      }
+      if (historyResult.status === "fulfilled") setTripHistory(historyResult.value.trips);
+      const refreshFailed = plansResult.status === "rejected" || historyResult.status === "rejected";
+      setDecisionNotice(
+        `Đã xác nhận PLAN v${selectedPlan.version}. Kế hoạch đã được lưu vào Lịch sử.`
+        + (refreshFailed ? " Chưa thể làm mới toàn bộ dữ liệu hiển thị; hãy tải lại trang." : ""),
+      );
       setSimulationState(null);
       setActiveTab("tracking");
       return true;
     } catch (error) {
-      setInlineError(error instanceof Error ? error.message : "Không thể xác nhận hành trình.");
+      setInlineError(decisionErrorMessage(error));
       return false;
+    } finally {
+      setConfirmingPlan(false);
+    }
+  };
+
+  const rejectSelectedJourney = async (replacement: PlanProposal, reason: string) => {
+    setConfirmingPlan(true);
+    setInlineError("");
+    setDecisionNotice("");
+    try {
+      const isF4Candidate = replacement.trigger_reason === "F4_REPLAN"
+        || replanningCandidatePlanId(activeReplan) === replacement.plan_id;
+      if (isF4Candidate) {
+        await rejectReplanningPlan(
+          currentTripId,
+          replacement.version,
+          planContextVersion,
+        );
+      } else {
+        await rejectTripPlan(replacement.plan_id, replacement.version, reason);
+      }
+      const plans = await getTripPlans(currentTripId);
+      setPlanHistory(plans.history ?? []);
+      setPlanVersions(plans.plans);
+      const confirmed = [...plans.plans].reverse().find((plan) => plan.status === "CONFIRMED") ?? null;
+      const rejected = plans.plans.find((plan) => plan.plan_id === replacement.plan_id)
+        ?? { ...replacement, status: "REJECTED" as const, decision_reason: reason };
+      setConfirmedPlanSnapshot(confirmed);
+      setConfirmedPlanId(confirmed?.plan_id ?? "");
+      setPlanProposal(confirmed ?? rejected);
+      setPlanAlternatives([confirmed ?? rejected]);
+      setActiveReplan(null);
+      setSimulationState(null);
+      setDecisionNotice(confirmed
+        ? `Đã từ chối PLAN v${replacement.version}; PLAN v${confirmed.version} vẫn được giữ nguyên. Hãy dừng xe và gọi hỗ trợ nếu hành trình hiện tại không còn bảo đảm mức pin dự phòng.`
+        : `Đã từ chối PLAN v${replacement.version}. Chưa có kế hoạch đang dùng; không khởi hành cho tới khi có phương án an toàn.`);
+    } catch (error) {
+      setInlineError(decisionErrorMessage(error));
     } finally {
       setConfirmingPlan(false);
     }
@@ -450,6 +639,7 @@ export default function App() {
 
   const rejectReplacementJourney = async (replacement: PlanProposal) => {
     setInlineError("");
+    setDecisionNotice("");
     try {
       const decision = await rejectReplanningPlan(
         currentTripId,
@@ -465,9 +655,15 @@ export default function App() {
       }
       setActiveReplan(null);
       setSimulationState(null);
+      const plans = await getTripPlans(currentTripId);
+      setPlanHistory(plans.history ?? []);
+      setPlanVersions(plans.plans);
+      setDecisionNotice(confirmedPlanSnapshot
+        ? `Đã từ chối PLAN v${replacement.version}; kế hoạch hiện tại vẫn được giữ nguyên. Nếu mức pin hoặc tuyến hiện tại không còn an toàn, hãy dừng xe ở vị trí an toàn và gọi hỗ trợ.`
+        : "Đã từ chối phương án mới. Không tiếp tục di chuyển khi chưa có kế hoạch an toàn được xác nhận.");
       return true;
     } catch (error) {
-      setInlineError(error instanceof Error ? error.message : "Không thể từ chối phương án mới.");
+      setInlineError(decisionErrorMessage(error));
       return false;
     }
   };
@@ -487,7 +683,7 @@ export default function App() {
         <nav aria-label="Điều hướng chính">
           <button type="button" className={`nav-item ${activeTab === "planning" ? "nav-item--active" : ""}`} onClick={() => setActiveTab("planning")}>▣ <strong>Lập kế hoạch</strong></button>
           <button type="button" className={`nav-item ${activeTab === "tracking" ? "nav-item--active" : ""}`} disabled={!planProposal || confirmedPlanId !== planProposal.plan_id} title={confirmedPlanId !== planProposal?.plan_id ? "Hãy xác nhận hành trình trước" : "Theo dõi hành trình"} onClick={() => setActiveTab("tracking")}>▢ <strong>Theo dõi</strong>{confirmedPlanId === planProposal?.plan_id ? <span className="nav-ready-dot" /> : null}</button>
-          <span className="nav-item">◷ Lịch sử</span>
+          <button type="button" className={`nav-item ${activeTab === "history" ? "nav-item--active" : ""}`} onClick={() => setActiveTab("history")}>◷ <strong>Lịch sử</strong></button>
           <span className="nav-item">? Hỗ trợ</span>
         </nav>
         <div className="account-actions">
@@ -582,10 +778,16 @@ export default function App() {
 
             {warningMessage ? <div className="message-banner warning">{warningMessage}</div> : null}
             {inlineError ? <div className="message-banner error">{inlineError}</div> : null}
+            {planningFailure ? <div className={`planning-failure planning-failure--${planningFailure.kind.toLowerCase()}`} role="alert">
+              <strong>{planningFailure.title}</strong>
+              <p>{planningFailure.message}</p>
+              {currentTripId ? <button type="button" onClick={() => { void generatePlan(currentTripId); }}>Thử lại</button> : null}
+            </div> : null}
 
             <button className="primary-button" type="submit" disabled={submitting || planningLoading}>
               {submitting || planningLoading ? "Đang tính dữ liệu live…" : "✦ Lập kế hoạch"}
             </button>
+            {planningLoading ? <button className="cancel-planning-button" type="button" onClick={cancelPlanning}>Hủy lập kế hoạch</button> : null}
             {currentTripId ? (
               <button className="recalculate-button" type="button" disabled={planningLoading} onClick={() => generatePlan(currentTripId)}>
                 Tính lại với dữ liệu mới nhất
@@ -606,9 +808,18 @@ export default function App() {
           loading={planningLoading || submitting}
           planningMessage={planningMessage}
           confirming={confirmingPlan}
+          showDecisionAction={false}
           onChooseJourney={(selectedPlan) => { void confirmSelectedJourney(selectedPlan); }}
         />
       </section>
+
+      {decisionNotice ? <div className="decision-notice" role="status">{decisionNotice}</div> : null}
+      {planProposal ? <PlanConfirmationBar
+        plan={planProposal}
+        busy={confirmingPlan}
+        onConfirm={async () => { await confirmSelectedJourney(planProposal); }}
+        onReject={async (reason) => { await rejectSelectedJourney(planProposal, reason); }}
+      /> : null}
 
       {planProposal ? (
         <section className="dashboard-lower-grid">
@@ -617,6 +828,12 @@ export default function App() {
           <WhyThisPlan plan={planProposal} />
         </section>
       ) : null}
+
+      {currentTripId ? <PlanHistoryTimeline
+        history={planHistory}
+        plans={planVersions}
+        onOpen={(plan) => setPlanProposal(plan)}
+      /> : null}
 
       {noFeasiblePlan ? (
         <section className="infeasible-section"><InfeasibleWarningBanner result={noFeasiblePlan} /></section>
@@ -627,13 +844,14 @@ export default function App() {
           <RecoveryPanel result={recoveryResult} onApplyEndpoint={applyRecoveryEndpoint} />
         </section>
       ) : null}
-      </> : (
+      </> : activeTab === "tracking" ? (
         <section className="tracking-page" id="top">
           {planProposal ? <>
             <header className="tracking-page-header">
               <div><small>F3 · GIÁM SÁT HÀNH TRÌNH</small><h1>Theo dõi chuyến đi</h1><p>PLAN v{planProposal.version} · Dữ liệu xe trong phiên này được mô phỏng.</p></div>
               <button type="button" onClick={() => setActiveTab("planning")}>← Xem lại kế hoạch</button>
             </header>
+            {decisionNotice ? <div className="tracking-decision-notice" role="alert">{decisionNotice}</div> : null}
             <div className="tracking-grid">
               <section className="tracking-map"><TripPlanMap
                 key={planProposal.plan_id}
@@ -663,7 +881,19 @@ export default function App() {
             </div>
           </> : <div className="tracking-empty"><span>⌁</span><h2>Chưa có hành trình để theo dõi</h2><p>Hãy lập và chọn một kế hoạch trước khi bắt đầu mô phỏng.</p><button type="button" onClick={() => setActiveTab("planning")}>Đi tới lập kế hoạch</button></div>}
         </section>
-      )}
+      ) : <TripHistoryPage
+        trips={tripHistory}
+        loading={historyLoading}
+        error={historyError}
+        onRetry={() => {
+          setHistoryLoading(true);
+          setHistoryError("");
+          void listTripHistory()
+            .then((response) => setTripHistory(response.trips))
+            .catch((error) => setHistoryError(error instanceof Error ? error.message : "Không tải được lịch sử chuyến đi."))
+            .finally(() => setHistoryLoading(false));
+        }}
+      />}
 
       {resolutionState ? (
         <div className="modal-backdrop" role="presentation">

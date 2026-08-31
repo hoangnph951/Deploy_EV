@@ -42,6 +42,7 @@ class ReflectionDecision(BaseModel):
     next_tool: str | None = None
     reason_codes: list[str] = Field(default_factory=list)
     evidence_refs: list[str] = Field(default_factory=list)
+    response_source: Literal["OPENAI", "SAFE_FALLBACK", "DETERMINISTIC"] = "DETERMINISTIC"
     public_summary: str = ""
 
 
@@ -68,6 +69,7 @@ class DecisionTraceItem(BaseModel):
     evidence_refs: list[str] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
     reason_codes: list[str] = Field(default_factory=list)
+    response_source: Literal["OPENAI", "SAFE_FALLBACK", "DETERMINISTIC"] = "DETERMINISTIC"
     public_summary: str = ""
 
 
@@ -82,6 +84,7 @@ class ActionProposalDraft(BaseModel):
     user_message: str
     limitations: list[str] = Field(default_factory=list)
     requires_owner_confirmation: bool
+    response_source: Literal["OPENAI", "SAFE_FALLBACK", "DETERMINISTIC"] = "DETERMINISTIC"
     public_summary: str = ""
 
 

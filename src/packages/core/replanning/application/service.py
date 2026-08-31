@@ -148,6 +148,7 @@ class ReplanningService:
                     status="SUCCEEDED" if draft_guard.allowed else "BLOCKED",
                     evidence_refs=action.evidence_refs,
                     reason_codes=action.reason_codes,
+                    response_source=action.response_source,
                     public_summary=action.user_message,
                 ),
                 DecisionTraceItem(
@@ -343,6 +344,7 @@ class ReplanningService:
                     action.reason_codes if draft_guard.allowed
                     else [draft_guard.reason_code or "ACTION_GUARD_REJECTED"]
                 ),
+                response_source=action.response_source,
                 public_summary=(
                     action.user_message if draft_guard.allowed
                     else "Đề xuất của trợ lý bị chặn và đã chuyển sang hành động thận trọng."

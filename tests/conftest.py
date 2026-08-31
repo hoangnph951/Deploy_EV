@@ -12,6 +12,7 @@ from src.apps.api.bootstrap.config import get_settings
 from src.apps.api.main import app
 from src.packages.agent.planning.nodes.planning_nodes import configure_planning_providers
 from src.packages.core.auth.api.dependencies import get_auth_service
+from src.packages.core.monitoring.api.dependencies import get_monitoring_simulator_service
 from src.packages.core.simulator.api.dependencies import get_simulator_service
 from src.packages.core.trips.api.dependencies import get_trip_service
 from src.packages.core.trips.infrastructure.environment import StaticEnvironmentProvider
@@ -43,6 +44,7 @@ async def client(tmp_path):
     get_settings.cache_clear()
     get_trip_service.cache_clear()
     get_auth_service.cache_clear()
+    get_monitoring_simulator_service.cache_clear()
     get_simulator_service.cache_clear()
 
     transport = ASGITransport(app=app)
@@ -51,6 +53,7 @@ async def client(tmp_path):
 
     get_trip_service.cache_clear()
     get_auth_service.cache_clear()
+    get_monitoring_simulator_service.cache_clear()
     get_simulator_service.cache_clear()
     get_settings.cache_clear()
 

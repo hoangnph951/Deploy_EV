@@ -8,6 +8,7 @@ import {
   labelStage,
   labelStatus,
   labelTool,
+  labelTraceKind,
 } from "./replanningPresentation.ts";
 
 
@@ -31,4 +32,15 @@ test("machine outcomes have understandable Vietnamese labels", () => {
     labelTool("nearest_station_reachability"),
     "Kiểm tra trạm sạc gần nhất có thể tiếp cận",
   );
+});
+
+
+test("trace labels distinguish GPT output from deterministic fallback", () => {
+  assert.equal(labelTraceKind("REFLECTING", "OPENAI"), "Phản ánh của GPT");
+  assert.equal(
+    labelTraceKind("REFLECTING", "SAFE_FALLBACK"),
+    "Phản hồi an toàn dự phòng",
+  );
+  assert.equal(labelTraceKind("DIAGNOSING", "DETERMINISTIC"), "Quan sát từ công cụ");
+  assert.equal(labelTraceKind("GUARDING_ACTION", "DETERMINISTIC"), "Bước điều phối");
 });

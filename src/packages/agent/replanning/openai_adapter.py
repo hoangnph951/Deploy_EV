@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from src.packages.agent.replanning.fallback import ConservativeSupervisor, SupervisorTurn
 from src.packages.agent.replanning.schemas import (
@@ -10,6 +11,8 @@ from src.packages.agent.replanning.schemas import (
     SupervisorStructuredTurn,
 )
 from src.packages.contracts.replanning import ActiveConstraintContext
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are the supervisory AI for an electric-vehicle trip replanning system.
 
@@ -61,7 +64,7 @@ class OpenAISupervisor:
     def __init__(
         self, *, api_key: str, model: str, client=None, fallback=None,
         base_url: str | None = None, timeout_seconds: float = 30.0,
-        max_turns: int = 8,
+        max_turns: int = 12,
     ):
         self.model = model
         self.fallback = fallback or ConservativeSupervisor()
@@ -92,6 +95,7 @@ class OpenAISupervisor:
             "trip_context": _model_payload(context),
             "telemetry": _model_payload(telemetry),
         }
+        last_error: Exception | None = None
         for _attempt in range(2):
             if not self._reserve_turn():
                 break
@@ -105,9 +109,12 @@ class OpenAISupervisor:
                 parsed = response.output_parsed
                 if parsed is None:
                     raise ValueError("OpenAI returned no structured replanning output.")
+                _mark_openai_response(parsed.action)
                 return SupervisorTurn(parsed.assessment, parsed.decision, parsed.action)
-            except Exception:
+            except Exception as exc:
+                last_error = exc
                 continue
+        self._log_fallback("ASSESS", last_error)
         return self.fallback.assess(
             event_types=event_types,
             active_constraints=active_constraints,
@@ -117,6 +124,7 @@ class OpenAISupervisor:
         )
 
     def _parse_or_fallback(self, *, payload: dict, text_format, fallback):
+        last_error: Exception | None = None
         for _attempt in range(2):
             if not self._reserve_turn():
                 break
@@ -127,12 +135,30 @@ class OpenAISupervisor:
                     input=json.dumps(payload, ensure_ascii=False),
                     text_format=text_format,
                 )
-                if response.output_parsed is None:
+                parsed = response.output_parsed
+                if parsed is None:
                     raise ValueError("OpenAI returned no structured replanning output.")
-                return response.output_parsed
-            except Exception:
+                _mark_openai_response(parsed)
+                return parsed
+            except Exception as exc:
+                last_error = exc
                 continue
+        self._log_fallback(str(payload.get("operation", "UNKNOWN")), last_error)
         return fallback()
+
+    def _log_fallback(self, operation: str, error: Exception | None) -> None:
+        if error is not None:
+            logger.warning(
+                "OpenAI replanning %s failed; using safe fallback: %s",
+                operation,
+                error,
+            )
+            return
+        logger.warning(
+            "OpenAI replanning %s skipped because the LLM turn budget was exhausted; "
+            "using safe fallback.",
+            operation,
+        )
 
     def _reserve_turn(self) -> bool:
         if self._turns_used >= self._max_turns:
@@ -221,3 +247,8 @@ def _model_payload(value):
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
     return value
+
+
+def _mark_openai_response(value) -> None:
+    if value is not None and hasattr(value, "response_source"):
+        value.response_source = "OPENAI"

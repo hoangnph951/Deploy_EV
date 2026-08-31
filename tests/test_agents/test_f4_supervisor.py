@@ -1,4 +1,5 @@
 import json
+import logging
 
 from src.packages.agent.replanning.fallback import ConservativeSupervisor
 from src.packages.agent.replanning.openai_adapter import OpenAISupervisor
@@ -80,6 +81,51 @@ def test_openai_adapter_reflection_retries_once_then_uses_safe_fallback() -> Non
     assert client.responses.calls == 2
     assert reflection.next_step == "CALL_TOOL"
     assert reflection.next_tool == "project_current_plan"
+    assert reflection.response_source == "SAFE_FALLBACK"
+
+
+def test_openai_adapter_marks_successful_reflection_as_openai() -> None:
+    class SuccessfulResponses:
+        def parse(self, **kwargs):
+            return type("Response", (), {"output_parsed": ReflectionDecision(
+                evidence_sufficient=False,
+                hypothesis_status="UNCERTAIN",
+                next_step="CALL_TOOL",
+                next_tool="project_current_plan",
+                public_summary="GPT đánh giá telemetry và chọn kiểm tra hành trình còn lại.",
+            )})()
+
+    client = type("Client", (), {"responses": SuccessfulResponses()})()
+    supervisor = OpenAISupervisor(api_key="test", model="test-model", client=client)
+
+    reflection = supervisor.reflect(
+        event_types=["SOC_UNDERPERFORMANCE"],
+        active_constraints=ActiveConstraintContext(soc_underperformance_active=True),
+        observations=[],
+        allowed_tools=["project_current_plan"],
+    )
+
+    assert reflection.response_source == "OPENAI"
+
+
+def test_openai_adapter_logs_fallback_reason(caplog) -> None:
+    class InvalidResponses:
+        def parse(self, **kwargs):
+            raise ValueError("provider rejected structured output")
+
+    client = type("Client", (), {"responses": InvalidResponses()})()
+    supervisor = OpenAISupervisor(api_key="test", model="test-model", client=client)
+
+    with caplog.at_level(logging.WARNING):
+        supervisor.reflect(
+            event_types=["SOC_UNDERPERFORMANCE"],
+            active_constraints=ActiveConstraintContext(soc_underperformance_active=True),
+            observations=[],
+            allowed_tools=["inspect_energy"],
+        )
+
+    assert "REFLECT" in caplog.text
+    assert "provider rejected structured output" in caplog.text
 
 
 def test_openai_adapter_drafts_action_without_private_reasoning_payload() -> None:
@@ -178,6 +224,41 @@ def test_openai_supervisor_uses_safe_fallback_after_llm_turn_budget() -> None:
 
     assert client.responses.calls == 1
     assert turn.assessment.primary_objective == "PROTECT_RESERVE_SOC"
+
+
+def test_openai_supervisor_default_budget_covers_nine_successful_operations() -> None:
+    class SuccessfulResponses:
+        def __init__(self):
+            self.calls = 0
+
+        def parse(self, **kwargs):
+            self.calls += 1
+            return type("Response", (), {"output_parsed": ReflectionDecision(
+                evidence_sufficient=False,
+                hypothesis_status="UNCERTAIN",
+                next_step="CALL_TOOL",
+                next_tool="inspect_energy",
+                public_summary=f"Phản ánh GPT số {self.calls}.",
+            )})()
+
+    responses = SuccessfulResponses()
+    client = type("Client", (), {"responses": responses})()
+    supervisor = OpenAISupervisor(api_key="test", model="test-model", client=client)
+
+    reflections = [
+        supervisor.reflect(
+            event_types=["SOC_UNDERPERFORMANCE"],
+            active_constraints=ActiveConstraintContext(soc_underperformance_active=True),
+            observations=[],
+            allowed_tools=["inspect_energy"],
+        )
+        for _ in range(9)
+    ]
+
+    assert responses.calls == 9
+    assert [item.public_summary for item in reflections] == [
+        f"Phản ánh GPT số {index}." for index in range(1, 10)
+    ]
 
 
 def test_openai_assessment_receives_the_runtime_tool_allowlist() -> None:

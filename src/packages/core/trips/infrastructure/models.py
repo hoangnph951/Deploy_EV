@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
@@ -46,7 +46,14 @@ class TripModel(Base):
 
 class PlanVersionModel(Base):
     __tablename__ = "plan_versions"
-    __table_args__ = (UniqueConstraint("trip_id", "version", name="uq_plan_versions_trip_version"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "trip_id",
+            "version",
+            "rank",
+            name="uq_plan_versions_trip_version_rank",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     trip_id: Mapped[str] = mapped_column(
@@ -57,12 +64,25 @@ class PlanVersionModel(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    planning_run_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("planning_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    rank: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    strategy: Mapped[str] = mapped_column(String(32), nullable=False, default="BALANCED")
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     base_plan_version: Mapped[int | None] = mapped_column(Integer)
     context_version: Mapped[int | None] = mapped_column(Integer)
     decision_reason: Mapped[str | None] = mapped_column(Text)
     assumptions: Mapped[dict] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
+    )
+    proposal: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=True,
     )
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)

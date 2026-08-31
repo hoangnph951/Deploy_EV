@@ -10,8 +10,10 @@ from src.packages.contracts.errors import ErrorEnvelope
 from src.packages.contracts.trips import (
     AssumptionSnapshot,
     PlanDecisionResponse,
+    PlanDetailResponse,
     PlanGenerationResponse,
     PlanListResponse,
+    PlanRejectRequest,
     ReplanRequest,
     TripCreatedResponse,
     TripCreateRequest,
@@ -115,6 +117,31 @@ def confirm_plan(
         owner_id=current_user_id,
         expected_version=_expected_version(request.headers.get("If-Match")),
         ip_address=request.client.host if request.client else None,
+    )
+
+
+@router.get("/plans/{plan_id}", response_model=PlanDetailResponse)
+def get_plan(
+    plan_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    trip_service: TripService = Depends(get_trip_service),
+) -> PlanDetailResponse:
+    return trip_service.get_plan(plan_id, owner_id=current_user_id)
+
+
+@router.post("/plans/{plan_id}/reject", response_model=PlanDecisionResponse)
+def reject_plan(
+    plan_id: str,
+    request_body: PlanRejectRequest,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    trip_service: TripService = Depends(get_trip_service),
+) -> PlanDecisionResponse:
+    return trip_service.reject_plan(
+        plan_id,
+        owner_id=current_user_id,
+        expected_version=_expected_version(request.headers.get("If-Match")),
+        reason=request_body.reason.strip(),
     )
 
 

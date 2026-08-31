@@ -40,6 +40,33 @@ def get_simulation(
     return service.get_state(trip_id, user_id)
 
 
+@router.post("/{trip_id}/pause", response_model=SimulationState)
+def pause_simulation(
+    trip_id: str,
+    user_id: str = Depends(get_current_user_id),
+    service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+) -> SimulationState:
+    return service.pause(trip_id, user_id)
+
+
+@router.post("/{trip_id}/resume", response_model=SimulationState)
+def resume_simulation(
+    trip_id: str,
+    user_id: str = Depends(get_current_user_id),
+    service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+) -> SimulationState:
+    return service.resume(trip_id, user_id)
+
+
+@router.post("/{trip_id}/reset", response_model=SimulationState)
+def reset_simulation(
+    trip_id: str,
+    user_id: str = Depends(get_current_user_id),
+    service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+) -> SimulationState:
+    return service.reset(trip_id, user_id)
+
+
 @router.post("/{trip_id}/refresh-telemetry", response_model=SimulationState)
 def refresh_simulation_telemetry(
     trip_id: str,

@@ -8,6 +8,7 @@ import {
   labelStage,
   labelStatus,
   labelTool,
+  labelTraceKind,
 } from "../lib/replanningPresentation";
 import { getConfirmableF4Plan } from "../lib/f4Confirmation";
 import type { PlanProposal, ReplanningOutcome } from "../lib/types";
@@ -78,7 +79,7 @@ export function ReplanningSupervisorPanel({
       <ol className="f4-decision-timeline">
         {run.decision_trace.slice(0, visibleTraceCount).map((item, index) => <li className={`f4-trace-${item.stage.toLowerCase()}`} key={item.sequence}>
           <div><strong>{labelStage(item.stage)}</strong><span>{index === visibleTraceCount - 1 && !traceComplete ? "Đang xử lý" : labelStatus(item.status)}</span></div>
-          <em>{item.stage === "REFLECTING" ? "Phản ánh của trợ lý" : item.stage === "DIAGNOSING" ? "Quan sát từ công cụ" : "Bước điều phối"}</em>
+          <em>{labelTraceKind(item.stage, item.response_source)}</em>
           {item.tool ? <p>{labelTool(item.tool)}</p> : null}
           {item.public_summary ? <small className="f4-public-summary">{item.public_summary}</small> : item.reason_codes.map((code) => <small key={code}>{explainReasonCode(code)}</small>)}
         </li>)}

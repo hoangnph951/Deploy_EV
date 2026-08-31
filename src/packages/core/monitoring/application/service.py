@@ -114,10 +114,16 @@ class MonitoringSimulatorService:
             plan = PlanProposal.model_validate(json.loads(record.proposal_json))
         if len(plan.route.polyline) < 2:
             raise AppError("ROUTE_REQUIRED", 409, "Kế hoạch chưa có polyline để mô phỏng.")
-        if request.scenario == "STATION_UNAVAILABLE" and not plan.charging_stops:
+        multi_events = set(request.scenario_events) or {
+            "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STATION_UNAVAILABLE",
+        }
+        needs_station = request.scenario == "STATION_UNAVAILABLE" or (
+            request.scenario == "MULTI_EVENT" and "STATION_UNAVAILABLE" in multi_events
+        )
+        if needs_station and not plan.charging_stops:
             raise AppError(
                 "STATION_REQUIRED", 409,
-                "Kịch bản STATION_UNAVAILABLE cần một proposal có ít nhất một trạm sạc.",
+                "Kịch bản có sự cố trạm cần một proposal có ít nhất một trạm sạc.",
             )
         scenario = request.scenario
         if scenario == "RANDOM":
@@ -170,6 +176,9 @@ class MonitoringSimulatorService:
             actual_soc = expected_soc
             freshness = "FRESH"
             recorded_at = datetime.now(UTC)
+            telemetry_snapshot_id = str(uuid4())
+            distance_to_route_km = 0.0
+            age_seconds = 0.0
             trigger = progress >= 0.35 and not session.anomaly_emitted
 
             if unavailable_station is not None and not session.anomaly_emitted:
@@ -187,34 +196,92 @@ class MonitoringSimulatorService:
                             unavailable_station.distance_from_origin_km - session.distance_km, 3
                         ),
                     },
+                    telemetry_snapshot_id=telemetry_snapshot_id,
+                    occurred_at=recorded_at,
                 )
+            elif trigger and session.scenario == "MULTI_EVENT":
+                selected_events = set(session.request.scenario_events) or {
+                    "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STATION_UNAVAILABLE",
+                }
+                if "ROUTE_DEVIATION" in selected_events:
+                    distance_to_route_km = self._thresholds.max_off_route_distance_km + 0.01
+                    lat = _offset_lat(lat, distance_to_route_km)
+                    self._emit(session, "ROUTE_DEVIATION", "Xe đã lệch khỏi tuyến dự kiến.", {
+                        "off_route_distance_km": distance_to_route_km,
+                        "threshold_km": self._thresholds.max_off_route_distance_km,
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
+                if "SOC_UNDERPERFORMANCE" in selected_events:
+                    soc_deficit_percent = self._thresholds.max_soc_drop_deviation_percent + 0.1
+                    actual_soc = expected_soc - soc_deficit_percent
+                    self._emit(session, "SOC_UNDERPERFORMANCE", "SOC thực tế thấp hơn mức dự kiến.", {
+                        "soc_deficit_percent": soc_deficit_percent,
+                        "threshold_percent": self._thresholds.max_soc_drop_deviation_percent,
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
+                if "STATION_UNAVAILABLE" in selected_events:
+                    station = next((
+                        stop for stop in sorted(
+                            session.plan.charging_stops,
+                            key=lambda item: item.distance_from_origin_km,
+                        )
+                        if stop.distance_from_origin_km > session.distance_km
+                    ), session.plan.charging_stops[0])
+                    session.unavailable_station_ids.append(station.station_id)
+                    self._emit(session, "STATION_UNAVAILABLE", f"Trạm {station.name} không khả dụng (mô phỏng).", {
+                        "station_id": station.station_id,
+                        "station_name": station.name,
+                        "station_distance_km": station.distance_from_origin_km,
+                        "vehicle_distance_km": round(session.distance_km, 3),
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
             elif trigger and session.scenario == "ROUTE_DEVIATION":
-                # Strictly over 2 km: 2.01 triggers while 1.99 does not.
-                lat = _offset_lat(lat, self._thresholds.max_off_route_distance_km + 0.01)
-                self._emit(session, "ROUTE_DEVIATION", "Xe đã lệch khỏi tuyến dự kiến.", {
-                    "off_route_distance_km": self._thresholds.max_off_route_distance_km + 0.01,
-                    "threshold_km": self._thresholds.max_off_route_distance_km,
-                })
+                distance_to_route_km = (
+                    session.request.scenario_value
+                    if session.request.scenario_value is not None
+                    else self._thresholds.max_off_route_distance_km + 0.01
+                )
+                lat = _offset_lat(lat, distance_to_route_km)
+                if self._evaluator.classify(
+                    off_route_distance_km=distance_to_route_km
+                ) == "ROUTE_DEVIATION":
+                    self._emit(session, "ROUTE_DEVIATION", "Xe đã lệch khỏi tuyến dự kiến.", {
+                        "off_route_distance_km": distance_to_route_km,
+                        "threshold_km": self._thresholds.max_off_route_distance_km,
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
             elif trigger and session.scenario == "SOC_UNDERPERFORMANCE":
-                actual_soc = expected_soc - self._thresholds.max_soc_drop_deviation_percent - 0.1
-                self._emit(session, "SOC_UNDERPERFORMANCE", "SOC thực tế thấp hơn mức dự kiến.", {
-                    "soc_deficit_percent": self._thresholds.max_soc_drop_deviation_percent + 0.1,
-                    "threshold_percent": self._thresholds.max_soc_drop_deviation_percent,
-                })
+                soc_deficit_percent = (
+                    session.request.scenario_value
+                    if session.request.scenario_value is not None
+                    else self._thresholds.max_soc_drop_deviation_percent + 0.1
+                )
+                actual_soc = expected_soc - soc_deficit_percent
+                if self._evaluator.classify(
+                    soc_deficit_percent=soc_deficit_percent
+                ) == "SOC_UNDERPERFORMANCE":
+                    self._emit(session, "SOC_UNDERPERFORMANCE", "SOC thực tế thấp hơn mức dự kiến.", {
+                        "soc_deficit_percent": soc_deficit_percent,
+                        "threshold_percent": self._thresholds.max_soc_drop_deviation_percent,
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
             elif trigger and session.scenario == "STALE_TELEMETRY":
-                recorded_at -= timedelta(seconds=self._thresholds.max_telemetry_silent_seconds + 1)
-                freshness = "STALE"
-                self._emit(session, "STALE_TELEMETRY", "Không nhận được telemetry mới quá 60 giây.", {
-                    "silent_seconds": self._thresholds.max_telemetry_silent_seconds + 1,
-                    "threshold_seconds": self._thresholds.max_telemetry_silent_seconds,
-                })
+                age_seconds = (
+                    session.request.scenario_value
+                    if session.request.scenario_value is not None
+                    else self._thresholds.max_telemetry_silent_seconds + 1
+                )
+                recorded_at -= timedelta(seconds=age_seconds)
+                if self._evaluator.classify(silent_seconds=age_seconds) == "STALE_TELEMETRY":
+                    freshness = "STALE"
+                    self._emit(session, "STALE_TELEMETRY", "Không nhận được telemetry mới quá 60 giây.", {
+                        "silent_seconds": age_seconds,
+                        "threshold_seconds": self._thresholds.max_telemetry_silent_seconds,
+                    }, telemetry_snapshot_id=telemetry_snapshot_id, occurred_at=recorded_at)
 
             session.telemetry = TelemetrySnapshot(
+                snapshot_id=telemetry_snapshot_id,
                 lat=lat, lon=lon, soc_percent=max(0, actual_soc),
                 # Simulation acceleration must not be presented as the physical speed of the car.
                 expected_soc_percent=max(0, expected_soc), speed_kph=60.0,
                 distance_km=session.distance_km, progress_percent=progress * 100,
-                freshness=freshness, recorded_at=recorded_at,
+                distance_to_route_km=distance_to_route_km,
+                freshness=freshness, recorded_at=recorded_at, age_seconds=age_seconds,
             )
             session.soc_risk = self._soc_risk_evaluator.observe(
                 actual_soc_percent=max(0, actual_soc),
@@ -229,6 +296,37 @@ class MonitoringSimulatorService:
         self._owned_trip(trip_id, owner_id)
         with self._lock:
             return self._state(self._require_session(trip_id))
+
+    def pause(self, trip_id: str, owner_id: str) -> SimulationState:
+        self._owned_trip(trip_id, owner_id)
+        with self._lock:
+            session = self._require_session(trip_id)
+            if session.status == "RUNNING":
+                session.status = "PAUSED"
+            return self._state(session)
+
+    def resume(self, trip_id: str, owner_id: str) -> SimulationState:
+        self._owned_trip(trip_id, owner_id)
+        with self._lock:
+            session = self._require_session(trip_id)
+            if session.status == "PAUSED":
+                session.status = "RUNNING"
+            return self._state(session)
+
+    def reset(self, trip_id: str, owner_id: str) -> SimulationState:
+        self._owned_trip(trip_id, owner_id)
+        with self._lock:
+            session = self._require_session(trip_id)
+            session.status = "RUNNING"
+            session.tick_count = 0
+            session.distance_km = 0.0
+            session.telemetry = None
+            session.events.clear()
+            session.unavailable_station_ids.clear()
+            session.replan_required = False
+            session.anomaly_emitted = False
+            session.soc_risk = SOCRiskState.empty()
+            return self._state(session)
 
     def refresh_telemetry(self, trip_id: str, owner_id: str) -> SimulationState:
         self._owned_trip(trip_id, owner_id)
@@ -349,15 +447,25 @@ class MonitoringSimulatorService:
                 session.replan_required = True
             return self._state(session)
 
-    def _emit(self, session: _Session, event_type: str, message: str, payload: dict) -> None:
+    def _emit(
+        self, session: _Session, event_type: str, message: str, payload: dict, *,
+        telemetry_snapshot_id: str | None = None,
+        occurred_at: datetime | None = None,
+    ) -> None:
         session.anomaly_emitted = True
         session.status = "AWAITING_DECISION"
         session.replan_required = event_type != "STALE_TELEMETRY"
+        event_id = str(uuid4())
+        event_time = occurred_at or datetime.now(UTC)
         event = MonitoringEvent(
-            id=str(uuid4()), trip_id=session.trip_id, event_type=event_type,
+            id=event_id, trip_id=session.trip_id, event_type=event_type,
+            telemetry_snapshot_id=telemetry_snapshot_id,
+            source_sequence=len(session.events) + 1,
             related_plan_version=getattr(session.plan, "version", 0),
             severity="CRITICAL" if event_type in {"ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE"} else "WARNING",
-            message=message, payload=payload, created_at=datetime.now(UTC),
+            message=message, payload=payload, created_at=event_time,
+            correlation_id=telemetry_snapshot_id or event_id,
+            tick=getattr(session, "tick_count", 0),
         )
         session.events.append(event)
         save_event = getattr(self._repository, "save_monitoring_event", None)

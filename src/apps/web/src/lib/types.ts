@@ -258,7 +258,7 @@ export type PlanProposal = {
   plan_id: string;
   trip_id: string;
   version: number;
-  status: "PENDING" | "CONDITIONAL" | "CONFIRMED" | "REJECTED" | "SUPERSEDED";
+  status: "PENDING" | "CONDITIONAL" | "CONFIRMED" | "REJECTED" | "SUPERSEDED" | "STALE_BY_NEW_CONTEXT" | "INVALIDATED_BY_SAFETY";
   route: RouteGeometry;
   charging_stops: ChargingStopProposal[];
   risk_assessment: RiskAssessment;
@@ -415,16 +415,19 @@ export type ReplanningPlanDecisionResponse = {
   status: "CONFIRMED" | "REJECTED";
 };
 export type MonitoringEventType = "ROUTE_DEVIATION" | "SOC_UNDERPERFORMANCE" | "STATION_UNAVAILABLE" | "STALE_TELEMETRY";
-export type SimulationScenarioSelection = "RANDOM" | "NORMAL" | MonitoringEventType;
+export type CompositeMonitoringEventType = Exclude<MonitoringEventType, "STALE_TELEMETRY">;
+export type SimulationScenarioSelection = "RANDOM" | "NORMAL" | "MULTI_EVENT" | MonitoringEventType;
+export type ReplanningContextResponse = { context_version: number };
 export type SimulationState = {
   trip_id: string;
   plan_id: string;
-  status: "IDLE" | "RUNNING" | "AWAITING_DECISION" | "COMPLETED" | "STOPPED";
-  selected_scenario: "NORMAL" | MonitoringEventType;
+  status: "IDLE" | "RUNNING" | "PAUSED" | "AWAITING_DECISION" | "COMPLETED" | "STOPPED";
+  selected_scenario: "NORMAL" | "MULTI_EVENT" | MonitoringEventType;
   telemetry: null | {
     snapshot_id?: string | null;
     lat: number; lon: number; soc_percent: number; expected_soc_percent: number;
     speed_kph: number; distance_km: number; progress_percent: number;
+    distance_to_route_km?: number; age_seconds?: number;
     source: "SIMULATED"; freshness: "FRESH" | "STALE"; recorded_at: string;
   };
   events: Array<{
@@ -469,6 +472,7 @@ export type ReplanningOutcome = {
   action: {
     action: string; reason_codes: string[]; evidence_refs: string[]; user_message: string;
     limitations: string[]; requires_owner_confirmation: boolean;
+    response_source: "OPENAI" | "SAFE_FALLBACK" | "DETERMINISTIC";
     public_summary: string;
   };
   tool_runs: Array<{
@@ -479,6 +483,7 @@ export type ReplanningOutcome = {
     sequence: number; stage: string; summary_code: string; status: string;
     tool: string | null; evidence_refs: string[]; missing_evidence: string[];
     reason_codes: string[];
+    response_source: "OPENAI" | "SAFE_FALLBACK" | "DETERMINISTIC";
     public_summary: string;
   }>;
   candidate: null | {
@@ -495,6 +500,7 @@ export type ReplanningOutcome = {
   reflection: {
     evidence_sufficient: boolean; hypothesis_status: string; missing_evidence: string[];
     next_step: string; next_tool: string | null; reason_codes: string[]; evidence_refs: string[];
+    response_source: "OPENAI" | "SAFE_FALLBACK" | "DETERMINISTIC";
     public_summary: string;
   };
   created_at: string;

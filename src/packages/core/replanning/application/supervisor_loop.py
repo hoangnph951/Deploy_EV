@@ -131,6 +131,7 @@ class SupervisorLoop:
                 evidence_refs=reflection.evidence_refs or observation.evidence_refs,
                 missing_evidence=reflection.missing_evidence,
                 reason_codes=reflection.reason_codes or observation.reason_codes,
+                response_source=reflection.response_source,
                 public_summary=reflection.public_summary,
             ))
             if observation.status != "SUCCEEDED":
@@ -165,6 +166,7 @@ class SupervisorLoop:
                         evidence_refs=continuation_reflection.evidence_refs,
                         missing_evidence=continuation_reflection.missing_evidence,
                         reason_codes=continuation_reflection.reason_codes,
+                        response_source=continuation_reflection.response_source,
                         public_summary=continuation_reflection.public_summary,
                     ))
                     if continuation_reflection.next_step != "PROPOSE_ACTION":
@@ -225,6 +227,7 @@ class SupervisorLoop:
             evidence_refs=strategy_reflection.evidence_refs,
             missing_evidence=strategy_reflection.missing_evidence,
             reason_codes=strategy_reflection.reason_codes,
+            response_source=strategy_reflection.response_source,
             public_summary=strategy_reflection.public_summary,
         ))
         if (
@@ -270,6 +273,7 @@ class SupervisorLoop:
                 evidence_refs=fallback_reflection.evidence_refs,
                 missing_evidence=fallback_reflection.missing_evidence,
                 reason_codes=fallback_reflection.reason_codes,
+                response_source=fallback_reflection.response_source,
                 public_summary=fallback_reflection.public_summary,
             ))
             if (
@@ -307,6 +311,7 @@ class SupervisorLoop:
             evidence_refs=candidate_reflection.evidence_refs or candidate_observation.evidence_refs,
             missing_evidence=candidate_reflection.missing_evidence,
             reason_codes=candidate_reflection.reason_codes or candidate_observation.reason_codes,
+            response_source=candidate_reflection.response_source,
             public_summary=candidate_reflection.public_summary,
         ))
         if (
@@ -351,6 +356,7 @@ class SupervisorLoop:
             evidence_refs=result.reflection.evidence_refs,
             missing_evidence=result.reflection.missing_evidence,
             reason_codes=result.reflection.reason_codes or comparison.reason_codes,
+            response_source=result.reflection.response_source,
             public_summary=result.reflection.public_summary,
         ))
         return result

@@ -194,6 +194,101 @@ async def test_f4_confirm_rejects_stale_context_and_confirms_current_context(cli
 
 
 @pytest.mark.asyncio
+async def test_f3_active_simulator_exposes_pause_resume_and_reset_controls(client):
+    owner = "owner-f3-controls"
+    created = await client.post(
+        "/api/v1/trips",
+        json={
+            "origin": {"address": "Ha Noi", "lat": None, "lng": None, "source_type": "MANUAL"},
+            "destination": {"address": "Hoa Binh", "lat": None, "lng": None, "source_type": "MANUAL"},
+            "initial_soc_percent": 85, "soc_source_type": "MANUAL",
+            "vehicle_profile_id": "xe-x-mvp-v1", "preference": "balanced",
+        },
+        headers={"X-User-Id": owner},
+    )
+    trip_id = created.json()["trip_id"]
+    planned = await client.post(
+        f"/api/v1/trips/{trip_id}/plans", headers={"X-User-Id": owner}
+    )
+    proposal = planned.json()["plan"]
+    confirmed = await client.post(
+        f"/api/v1/trips/{trip_id}/plans/{proposal['version']}/confirm",
+        headers={"X-User-Id": owner},
+        json={"expected_plan_version": proposal["version"], "expected_context_version": 1},
+    )
+    assert confirmed.status_code == 200
+    started = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/start",
+        headers={"X-User-Id": owner},
+        json={"plan_id": proposal["plan_id"], "plan": proposal, "scenario": "NORMAL"},
+    )
+    assert started.status_code == 200
+
+    paused = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/pause", headers={"X-User-Id": owner}
+    )
+    unchanged = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/tick", headers={"X-User-Id": owner}
+    )
+    resumed = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/resume", headers={"X-User-Id": owner}
+    )
+    advanced = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/tick", headers={"X-User-Id": owner}
+    )
+    reset = await client.post(
+        f"/api/v1/simulator/trips/{trip_id}/reset", headers={"X-User-Id": owner}
+    )
+
+    assert paused.json()["status"] == "PAUSED"
+    assert unchanged.json()["tick_count"] == 0
+    assert resumed.json()["status"] == "RUNNING"
+    assert advanced.json()["tick_count"] == 1
+    assert reset.json()["status"] == "RUNNING"
+    assert reset.json()["tick_count"] == 0
+    assert reset.json()["telemetry"] is None
+
+
+@pytest.mark.asyncio
+async def test_confirmed_replan_history_uses_the_replan_starting_soc(client):
+    owner = "owner-f4-history-soc"
+    created = await client.post(
+        "/api/v1/trips",
+        json={
+            "origin": {"address": "Ha Noi", "lat": None, "lng": None, "source_type": "MANUAL"},
+            "destination": {"address": "Hoa Binh", "lat": None, "lng": None, "source_type": "MANUAL"},
+            "initial_soc_percent": 60, "soc_source_type": "MANUAL",
+            "vehicle_profile_id": "xe-x-mvp-v1", "preference": "balanced",
+        },
+        headers={"X-User-Id": owner},
+    )
+    trip_id = created.json()["trip_id"]
+    trip = await client.get(f"/api/v1/trips/{trip_id}", headers={"X-User-Id": owner})
+    replan = await client.post(
+        f"/api/v1/trips/{trip_id}/plans/replan",
+        headers={"X-User-Id": owner},
+        json={
+            "current_lat": trip.json()["origin"]["lat"],
+            "current_lon": trip.json()["origin"]["lng"],
+            "current_soc_percent": 54.4,
+            "excluded_station_ids": [],
+        },
+    )
+    proposal = replan.json()["plan"]
+    assert proposal["soc_points"][0]["soc_percent"] == pytest.approx(54.4)
+    confirmed = await client.post(
+        f"/api/v1/plans/{proposal['plan_id']}/confirm",
+        headers={"X-User-Id": owner, "If-Match": str(proposal["version"])},
+    )
+    assert confirmed.status_code == 200
+
+    history = await client.get("/api/v1/trips/history", headers={"X-User-Id": owner})
+
+    assert history.status_code == 200
+    assert history.json()["trips"][0]["initial_soc"]["value_percent"] == pytest.approx(54.4)
+
+
+@pytest.mark.asyncio
 async def test_new_context_marks_existing_pending_plan_stale(client):
     created = await client.post(
         "/api/v1/trips",

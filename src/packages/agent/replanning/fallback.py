@@ -35,6 +35,7 @@ class ConservativeSupervisor:
                 user_message="Cần telemetry GPS và SOC mới trước khi lập lại kế hoạch.",
                 limitations=["Không sử dụng vị trí hoặc SOC đã cũ để tính tuyến."],
                 requires_owner_confirmation=False,
+                response_source="SAFE_FALLBACK",
             )
             return SupervisorTurn(
                 SituationAssessment(
@@ -107,6 +108,7 @@ class ConservativeSupervisor:
                 next_step="REQUEST_TELEMETRY", next_tool=None,
                 reason_codes=["TELEMETRY_BLOCKED"],
                 evidence_refs=blocked.evidence_refs if blocked else [],
+                response_source="SAFE_FALLBACK",
                 public_summary=(
                     "Bằng chứng hiện tại không hợp lệ; cần GPS và mức pin mới trước khi tiếp tục."
                 ),
@@ -117,6 +119,7 @@ class ConservativeSupervisor:
                 missing_evidence=[], next_step="CALL_TOOL", next_tool=allowed_tools[0],
                 reason_codes=["SAFE_FALLBACK_DIAGNOSTIC"],
                 evidence_refs=[ref for item in observations for ref in item.evidence_refs],
+                response_source="SAFE_FALLBACK",
                 public_summary=_fallback_reflection_summary(
                     event_types, observations, allowed_tools[0]
                 ),
@@ -126,6 +129,7 @@ class ConservativeSupervisor:
             missing_evidence=[], next_step="PROPOSE_ACTION", next_tool=None,
             reason_codes=["SAFE_FALLBACK_EVIDENCE_COMPLETE"],
             evidence_refs=[ref for item in observations for ref in item.evidence_refs],
+            response_source="SAFE_FALLBACK",
             public_summary=(
                 "Đã có đủ bằng chứng công khai để chuyển sang tạo và kiểm tra phương án mới."
             ),
@@ -147,6 +151,7 @@ class ConservativeSupervisor:
                 evidence_refs=evidence_refs,
                 user_message="Trạm không khả dụng không còn ảnh hưởng phần hành trình phía trước; tiếp tục kế hoạch hiện tại.",
                 limitations=[], requires_owner_confirmation=False,
+                response_source="SAFE_FALLBACK",
             )
         if feasibility_verdict == "INFEASIBLE":
             return ActionProposalDraft(
@@ -154,6 +159,7 @@ class ConservativeSupervisor:
                 reason_codes=["DETERMINISTIC_INFEASIBLE"], evidence_refs=evidence_refs,
                 user_message="Không tìm thấy phương án đã được chứng minh an toàn.",
                 limitations=[], requires_owner_confirmation=False,
+                response_source="SAFE_FALLBACK",
             )
         if feasibility_verdict in {"INSUFFICIENT_EVIDENCE", "SEARCH_EXHAUSTED"}:
             return ActionProposalDraft(
@@ -161,12 +167,14 @@ class ConservativeSupervisor:
                 reason_codes=[feasibility_verdict], evidence_refs=evidence_refs,
                 user_message="Chưa đủ bằng chứng để đề xuất một hành trình an toàn.",
                 limitations=[], requires_owner_confirmation=False,
+                response_source="SAFE_FALLBACK",
             )
         return ActionProposalDraft(
             action="PROPOSE_REPLAN", reason_codes=["CANDIDATE_FEASIBLE"],
             evidence_refs=evidence_refs,
             user_message="Có phương án mới cần bạn xem xét và xác nhận.",
             limitations=[], requires_owner_confirmation=True,
+            response_source="SAFE_FALLBACK",
         )
 
 

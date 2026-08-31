@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     openai_replanning_enabled: bool = True
     openai_replanning_timeout_seconds: float = Field(default=30.0, gt=1.0, le=60.0)
     replanning_max_tool_calls: int = Field(default=6, ge=1, le=12)
-    replanning_max_llm_turns: int = Field(default=8, ge=1, le=8)
+    replanning_max_llm_turns: int = Field(default=12, ge=1, le=16)
 
     database_url: str = "sqlite:///./data/app.db"
     chroma_persist_dir: str = "./data/chroma"
