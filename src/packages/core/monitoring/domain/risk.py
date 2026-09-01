@@ -15,5 +15,5 @@ class SOCRiskState(BaseModel):
     warning_level: Literal["NONE", "WATCH", "WARNING", "EVENT"] = "NONE"
 
     @classmethod
-    def empty(cls) -> "SOCRiskState":
+    def empty(cls) -> SOCRiskState:
         return cls(expected_soc_percent=0, actual_soc_percent=0, residual_percent=0)

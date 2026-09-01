@@ -11,7 +11,6 @@ from src.packages.contracts.monitoring import (
     TelemetrySnapshot,
 )
 
-
 ReplanAction = Literal[
     "CONTINUE_CURRENT_PLAN",
     "PROPOSE_REPLAN",

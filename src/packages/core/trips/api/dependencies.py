@@ -184,6 +184,7 @@ def get_trip_service() -> TripService:
                     api_key=settings.openai_api_key,
                     model=settings.model_name,
                     timeout_seconds=settings.ai_plan_explanation_timeout_seconds,
+                    base_url=settings.openai_base_url or None,
                 )
                 if settings.app_env != "test"
                 else DeterministicPlanRanker()

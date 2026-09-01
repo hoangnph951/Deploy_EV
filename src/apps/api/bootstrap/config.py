@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +11,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
         protected_namespaces=("settings_",),
     )
 
@@ -26,7 +27,12 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_base_url: str = ""
-    model_name: str = "gpt-4o-mini"
+    # OPENAI_MODEL is the provider-neutral deployment name. MODEL_NAME remains
+    # supported for existing environments.
+    model_name: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("OPENAI_MODEL", "MODEL_NAME"),
+    )
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     ai_plan_explanation_enabled: bool = False
     ai_plan_explanation_timeout_seconds: float = Field(default=12.0, gt=0.1, le=60.0)

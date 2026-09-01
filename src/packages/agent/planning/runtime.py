@@ -6,6 +6,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 
 from src.packages.core.planning.application.ports import DeterministicPlanRanker, SafePlanRanker
+from src.packages.core.trips.application.station_edge_repository import StationEdgeRepository
 from src.packages.core.trips.infrastructure.energy_tool import EnergyTool
 from src.packages.core.trips.infrastructure.environment import (
     EnvironmentProvider,

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,8 @@ from src.packages.agent.planning.nodes.planning_nodes import configure_planning_
 from src.packages.core.auth.api.dependencies import get_auth_service
 from src.packages.core.monitoring.api.dependencies import get_monitoring_simulator_service
 from src.packages.core.simulator.api.dependencies import get_simulator_service
+from src.packages.core.simulator.application.catalog_service import SimulationCatalogService
+from src.packages.core.simulator.application.simulator_service import SimulatorService
 from src.packages.core.trips.api.dependencies import get_trip_service
 from src.packages.core.trips.infrastructure.environment import StaticEnvironmentProvider
 from src.packages.core.trips.infrastructure.routing import InMemoryRoutingProvider
@@ -46,10 +49,16 @@ async def client(tmp_path):
     get_auth_service.cache_clear()
     get_monitoring_simulator_service.cache_clear()
     get_simulator_service.cache_clear()
+    simulation_log_directory = Path(__file__).resolve().parent / "fixtures" / "log_F1"
+    simulator_service = SimulatorService(SimulationCatalogService(simulation_log_directory))
+    app.dependency_overrides[get_simulator_service] = lambda: simulator_service
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.pop(get_simulator_service, None)
 
     get_trip_service.cache_clear()
     get_auth_service.cache_clear()

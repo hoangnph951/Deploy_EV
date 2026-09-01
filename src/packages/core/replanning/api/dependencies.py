@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from src.packages.core.replanning.application.runtime import ReplanningRuntimeStore
 from src.apps.api.bootstrap.config import get_settings
+from src.packages.core.replanning.application.runtime import ReplanningRuntimeStore
 from src.packages.core.replanning.infrastructure.repository import SqlAlchemyReplanningAuditRepository
 
 

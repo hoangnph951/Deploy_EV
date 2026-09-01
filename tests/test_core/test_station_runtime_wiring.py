@@ -7,15 +7,18 @@ from src.packages.core.trips.api import dependencies
 from src.packages.core.trips.api.dependencies import _build_station_service
 from src.packages.core.trips.infrastructure.geocoding import InMemoryGeocoder
 from src.packages.core.trips.infrastructure.local_station_catalog_service import (
-    DisabledStationCatalogService,
     LocalStationCatalogService,
 )
 from src.packages.core.trips.infrastructure.station_catalog_repository import (
     SqlAlchemyStationCatalogRepository,
 )
+from src.packages.core.trips.infrastructure.station_service import (
+    FallbackStationDataService,
+    VinFastStationDataService,
+)
 
 
-def test_production_station_runtime_reads_local_catalog_not_vinfast_http(tmp_path) -> None:
+def test_production_station_runtime_prefers_local_catalog_then_vinfast(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         database_url=f"sqlite:///{(tmp_path / 'runtime.db').as_posix()}",
@@ -27,10 +30,12 @@ def test_production_station_runtime_reads_local_catalog_not_vinfast_http(tmp_pat
 
     service = _build_station_service(settings, repository, InMemoryGeocoder())
 
-    assert isinstance(service, LocalStationCatalogService)
+    assert isinstance(service, FallbackStationDataService)
+    assert isinstance(service._primary, LocalStationCatalogService)
+    assert isinstance(service._fallback, VinFastStationDataService)
 
 
-def test_disabled_catalog_fails_closed_instead_of_using_runtime_http(tmp_path) -> None:
+def test_disabled_catalog_uses_live_vinfast_provider(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         database_url=f"sqlite:///{(tmp_path / 'runtime.db').as_posix()}",
@@ -42,7 +47,7 @@ def test_disabled_catalog_fails_closed_instead_of_using_runtime_http(tmp_path) -
 
     service = _build_station_service(settings, repository, InMemoryGeocoder())
 
-    assert isinstance(service, DisabledStationCatalogService)
+    assert isinstance(service, VinFastStationDataService)
 
 
 def test_osrm_road_version_is_bound_to_prepared_dataset_file(tmp_path) -> None:

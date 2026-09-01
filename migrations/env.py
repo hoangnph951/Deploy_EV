@@ -7,6 +7,7 @@ from alembic import context
 from src.apps.api.bootstrap.config import get_settings
 from src.packages.core.auth.infrastructure import models as auth_models  # noqa: F401
 from src.packages.core.policies.infrastructure import models as policy_models  # noqa: F401
+from src.packages.core.replanning.infrastructure import models as replanning_models  # noqa: F401
 from src.packages.core.trips.infrastructure import models as trip_models  # noqa: F401
 from src.packages.core.trips.infrastructure.database import Base, normalize_database_url
 

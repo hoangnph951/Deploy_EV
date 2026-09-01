@@ -1,0 +1,120 @@
+substitutions:
+  _REGION: asia-southeast1
+  _REPOSITORY: cloud-run-source-deploy
+  _SERVICE: p-210-api
+  _MIGRATION_JOB: p-210-api-migrate
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - .
+
+  - id: lint
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build]
+    args:
+      - run
+      - --rm
+      - --env
+      - APP_ENV=test
+      - --env
+      - OPENAI_API_KEY=test-key
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - python
+      - -m
+      - ruff
+      - check
+      - src
+      - tests
+      - migrations
+
+  - id: test
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build]
+    args:
+      - run
+      - --rm
+      - --env
+      - APP_ENV=test
+      - --env
+      - OPENAI_API_KEY=test-key
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - python
+      - -m
+      - pytest
+      - tests
+      - -q
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    waitFor: [lint, test]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+
+  - id: update-migration-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [push]
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - ${_MIGRATION_JOB}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --quiet
+
+  - id: migrate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [update-migration-job]
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - ${_MIGRATION_JOB}
+      - --region=${_REGION}
+      - --wait
+      - --quiet
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [migrate]
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --quiet
+
+  - id: health-check
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [deploy]
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        service_url="$$(gcloud run services describe '${_SERVICE}' --region '${_REGION}' --format='value(status.url)')"
+        for attempt in $$(seq 1 12); do
+          if curl --fail --silent --show-error "$${service_url}/health"; then
+            exit 0
+          fi
+          sleep 5
+        done
+        exit 1
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

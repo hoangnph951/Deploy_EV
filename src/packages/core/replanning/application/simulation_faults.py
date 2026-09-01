@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Literal, Protocol
 
-
 SimulationFault = Literal[
     "NONE",
     "F1_PROVIDER_FAILURE",

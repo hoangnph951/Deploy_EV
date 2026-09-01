@@ -54,6 +54,7 @@ def build_grounded_explanation(
             ChatOpenAI(
                 model=settings.model_name,
                 api_key=settings.openai_api_key,
+                base_url=settings.openai_base_url or None,
                 temperature=0.0,
                 timeout=min(3.0, settings.ai_plan_explanation_timeout_seconds),
                 max_retries=0,

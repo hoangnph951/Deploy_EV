@@ -1,9 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
+from src.packages.contracts.monitoring import MonitoringEvent
 from src.packages.contracts.replanning import ActiveConstraintContext
 from src.packages.core.replanning.application.event_coordinator import EventCoordinator
-from src.packages.contracts.monitoring import MonitoringEvent
-
 
 NOW = datetime(2026, 8, 26, 10, 0, tzinfo=UTC)
 

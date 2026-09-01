@@ -6,7 +6,7 @@ from src.packages.contracts.simulator import SimulationStartRequest
 from src.packages.core.simulator.application.catalog_service import PROFILES, SimulationCatalogService
 from src.packages.core.simulator.application.simulator_service import SimulatorService
 
-LOG_DIRECTORY = Path(__file__).resolve().parents[2] / "log_F1"
+LOG_DIRECTORY = Path(__file__).resolve().parents[1] / "fixtures" / "log_F1"
 
 
 def ready_case(catalog: SimulationCatalogService, profile: str):

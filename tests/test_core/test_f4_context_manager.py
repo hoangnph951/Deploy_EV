@@ -4,7 +4,6 @@ from src.packages.contracts.monitoring import MonitoringEvent, TelemetrySnapshot
 from src.packages.contracts.replanning import ActiveConstraintContext, TripContextSnapshot
 from src.packages.core.replanning.application.context_manager import TripContextManager
 
-
 NOW = datetime(2026, 8, 26, 10, 0, tzinfo=UTC)
 
 

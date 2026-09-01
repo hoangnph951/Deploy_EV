@@ -68,6 +68,8 @@ out/
 
 # Per-run F1 algorithm traces (generated locally during testing)
 log_F1/*.jsonl
+!tests/fixtures/log_F1/
+!tests/fixtures/log_F1/*.jsonl
 
 
 *.osm.pbf

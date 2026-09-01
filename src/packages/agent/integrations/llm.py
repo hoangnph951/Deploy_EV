@@ -12,10 +12,18 @@ class SafePlanRanking(BaseModel):
 class OpenAISafePlanRanker:
     """Optional adapter; it cannot create, edit, or validate plan facts."""
 
-    def __init__(self, *, api_key: str, model: str, timeout_seconds: float):
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        timeout_seconds: float,
+        base_url: str | None = None,
+    ):
         self._api_key = api_key
         self._model = model
         self._timeout_seconds = timeout_seconds
+        self._base_url = base_url
 
     def rank(self, plans: list[PlanProposal]) -> list[PlanProposal]:
         if not self._api_key or len(plans) < 2:
@@ -49,6 +57,7 @@ class OpenAISafePlanRanker:
             llm = ChatOpenAI(
                 model=self._model,
                 api_key=self._api_key,
+                base_url=self._base_url or None,
                 temperature=0.0,
                 timeout=self._timeout_seconds,
                 max_retries=1,

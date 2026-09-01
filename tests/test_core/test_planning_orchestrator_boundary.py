@@ -2,6 +2,7 @@ from src.packages.core.planning.application.orchestrator import (
     PlanningExecution,
     PlanningRequest,
 )
+from src.packages.core.planning.domain.outcomes import PlanningOutcomeKind
 
 
 def test_planning_request_carries_replanning_station_blacklist():
@@ -13,7 +14,6 @@ def test_planning_request_carries_replanning_station_blacklist():
     )
 
     assert request.to_state()["excluded_station_ids"] == ["ST-10"]
-from src.packages.core.planning.domain.outcomes import PlanningOutcomeKind
 
 
 def test_planning_execution_classifies_success() -> None:

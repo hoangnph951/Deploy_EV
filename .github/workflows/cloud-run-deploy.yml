@@ -1,0 +1,44 @@
+name: Deploy backend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "src/apps/web/**"
+      - ".github/workflows/frontend-publish.yml"
+      - "docs/**"
+      - "presentation/**"
+      - "**/*.md"
+
+concurrency:
+  group: cloud-run-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build, migrate, and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1089728826065/locations/global/workloadIdentityPools/github/providers/deploy-ev
+          service_account: github-deploy@project-aa78c795-9ceb-4b68-956.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Submit Cloud Build
+        run: >-
+          gcloud builds submit
+          --project=project-aa78c795-9ceb-4b68-956
+          --region=asia-southeast1
+          --config=cloudbuild.yaml
+          --quiet
+          .
