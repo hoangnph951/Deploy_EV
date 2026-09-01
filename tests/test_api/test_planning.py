@@ -10,6 +10,7 @@ from src.packages.core.trips.infrastructure.routing import (
     RoutingUnavailableError,
 )
 from src.packages.core.trips.infrastructure.station_service import (
+    CandidateStation,
     FixtureStationDataService,
     StationProviderError,
 )
@@ -36,6 +37,36 @@ class FailingStationService:
 
     def find_station_window(self, *args, **kwargs):
         raise StationProviderError("simulated station provider failure")
+
+
+class ControlledStationService:
+    """One deterministic CCS2 stop located halfway along the test route."""
+
+    def __init__(self):
+        self.station = CandidateStation(
+            station_id="ST-CONTROLLED",
+            name="Controlled charging station",
+            lat=20.5,
+            lon=105.8,
+            address="Controlled test corridor",
+            connector_types=["CCS2"],
+            max_power_kw=60.0,
+            detour_distance_km=0.0,
+            detour_duration_min=0.0,
+            freshness="FRESH",
+            distance_from_origin_km=55.5,
+            port_count=4,
+            station_status="ACTIVE",
+            opening_24_7=True,
+        )
+
+    def find_corridor_stations(self, *args, **kwargs):
+        return [self.station]
+
+    def find_station_window(self, *args, **kwargs):
+        start = float(kwargs.get("progress_start_km", 0.0))
+        end = float(kwargs.get("progress_end_km", float("inf")))
+        return [self.station] if start <= self.station.distance_from_origin_km <= end else []
 
 
 class FallbackEnvironmentProvider(StaticEnvironmentProvider):
@@ -102,6 +133,72 @@ async def test_generate_trip_plan_happy_path(client):
         f"/api/v1/trips/{trip_id}", headers={"X-User-Id": "owner-1"}
     )
     assert detail_res.json()["status"] == "PLANNED"
+
+
+@pytest.mark.asyncio
+async def test_station_bearing_plan_survives_reload_and_owner_confirmation(client):
+    create_res = await client.post(
+        "/api/v1/trips",
+        json={
+            "origin": {
+                "address": "Controlled origin",
+                "lat": 21.0,
+                "lng": 105.8,
+                "source_type": "MANUAL",
+            },
+            "destination": {
+                "address": "Controlled destination",
+                "lat": 20.0,
+                "lng": 105.8,
+                "source_type": "MANUAL",
+            },
+            "initial_soc_percent": 50,
+            "soc_source_type": "MANUAL",
+            "vehicle_profile_id": "vinfast-vf3-v1",
+            "preference": "balanced",
+        },
+        headers={"X-User-Id": "owner-station-controlled"},
+    )
+    assert create_res.status_code == 201
+    trip_id = create_res.json()["trip_id"]
+
+    configure_planning_providers(
+        routing_provider=InMemoryRoutingProvider(),
+        station_service=ControlledStationService(),
+        environment_provider=StaticEnvironmentProvider(),
+    )
+    try:
+        generated = await client.post(
+            f"/api/v1/trips/{trip_id}/plans",
+            headers={"X-User-Id": "owner-station-controlled"},
+        )
+        assert generated.status_code == 201
+        plan = generated.json()["plan"]
+        assert plan["charging_stops"]
+        assert plan["charging_stops"][0]["station_id"] == "ST-CONTROLLED"
+
+        reloaded = await client.get(
+            f"/api/v1/trips/{trip_id}/plans",
+            headers={"X-User-Id": "owner-station-controlled"},
+        )
+        reloaded_plan = reloaded.json()["plans"][0]
+        assert reloaded_plan["charging_stops"][0]["station_id"] == "ST-CONTROLLED"
+
+        confirmed = await client.post(
+            f"/api/v1/plans/{plan['plan_id']}/confirm",
+            headers={
+                "X-User-Id": "owner-station-controlled",
+                "If-Match": str(plan["version"]),
+            },
+        )
+        assert confirmed.status_code == 200
+        assert confirmed.json()["plan"]["status"] == "CONFIRMED"
+    finally:
+        configure_planning_providers(
+            routing_provider=InMemoryRoutingProvider(),
+            station_service=FixtureStationDataService(),
+            environment_provider=StaticEnvironmentProvider(),
+        )
 
 
 @pytest.mark.asyncio

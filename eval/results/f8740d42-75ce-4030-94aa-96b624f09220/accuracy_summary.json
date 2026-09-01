@@ -1,0 +1,365 @@
+{
+  "case_count": 60,
+  "event_classification": {
+    "sample_count": 60,
+    "labels": {
+      "ROUTE_DEVIATION": {
+        "tp": 17,
+        "fp": 3,
+        "fn": 0,
+        "tn": 40,
+        "precision": 0.85,
+        "recall": 1.0,
+        "f1": 0.9189189189189189,
+        "support": 17
+      },
+      "SOC_UNDERPERFORMANCE": {
+        "tp": 14,
+        "fp": 0,
+        "fn": 0,
+        "tn": 46,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 14
+      },
+      "STALE_TELEMETRY": {
+        "tp": 8,
+        "fp": 0,
+        "fn": 1,
+        "tn": 51,
+        "precision": 1.0,
+        "recall": 0.8888888888888888,
+        "f1": 0.9411764705882353,
+        "support": 9
+      },
+      "STATION_UNAVAILABLE": {
+        "tp": 13,
+        "fp": 0,
+        "fn": 2,
+        "tn": 45,
+        "precision": 1.0,
+        "recall": 0.8666666666666667,
+        "f1": 0.9285714285714286,
+        "support": 15
+      }
+    },
+    "macro": {
+      "precision": 0.9625,
+      "recall": 0.9388888888888889,
+      "f1": 0.9471667045196457
+    },
+    "micro": {
+      "precision": 0.9454545454545454,
+      "recall": 0.9454545454545454,
+      "f1": 0.9454545454545454
+    }
+  },
+  "infeasible": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "tn": 59,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "support": 1
+  },
+  "exact_match": {
+    "outcome": 0.85,
+    "action": 0.8166666666666667,
+    "lifecycle": 0.8333333333333334
+  },
+  "tools": {
+    "precision": 0.5903614457831325,
+    "recall": 0.8596491228070176,
+    "required_recall": 0.8596491228070176,
+    "forbidden_violation_rate": 0.0,
+    "by_supervisor_mode": {
+      "OPENAI": {
+        "case_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "required_recall": 1.0,
+        "forbidden_violation_rate": 0.0
+      },
+      "SAFE_FALLBACK": {
+        "case_count": 21,
+        "precision": 0.5802469135802469,
+        "recall": 0.8545454545454545,
+        "required_recall": 0.8545454545454545,
+        "forbidden_violation_rate": 0.0
+      },
+      "DETERMINISTIC_ORACLE": {
+        "case_count": 39,
+        "precision": 1.0,
+        "recall": 1.0,
+        "required_recall": 1.0,
+        "forbidden_violation_rate": 0.0
+      },
+      "UNKNOWN": {
+        "case_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "required_recall": 1.0,
+        "forbidden_violation_rate": 0.0
+      }
+    }
+  },
+  "violations": {
+    "safety": 0,
+    "constraint": 59,
+    "epoch": 3,
+    "candidate": 2,
+    "safety_candidate": 7,
+    "blacklist": 0,
+    "stale": 0,
+    "security": 1
+  },
+  "safety_subset_infeasible_recall": 1.0,
+  "safety_gate_passed": false,
+  "cohorts": {
+    "MENTOR_REMEDIATION": {
+      "case_count": 15,
+      "event_classification": {
+        "sample_count": 15,
+        "labels": {
+          "ROUTE_DEVIATION": {
+            "tp": 6,
+            "fp": 1,
+            "fn": 0,
+            "tn": 8,
+            "precision": 0.8571428571428571,
+            "recall": 1.0,
+            "f1": 0.923076923076923,
+            "support": 6
+          },
+          "SOC_UNDERPERFORMANCE": {
+            "tp": 5,
+            "fp": 0,
+            "fn": 0,
+            "tn": 10,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 5
+          },
+          "STALE_TELEMETRY": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 0,
+            "tn": 14,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 1
+          },
+          "STATION_UNAVAILABLE": {
+            "tp": 5,
+            "fp": 0,
+            "fn": 1,
+            "tn": 9,
+            "precision": 1.0,
+            "recall": 0.8333333333333334,
+            "f1": 0.9090909090909091,
+            "support": 6
+          }
+        },
+        "macro": {
+          "precision": 0.9642857142857143,
+          "recall": 0.9583333333333334,
+          "f1": 0.958041958041958
+        },
+        "micro": {
+          "precision": 0.9444444444444444,
+          "recall": 0.9444444444444444,
+          "f1": 0.9444444444444444
+        }
+      },
+      "infeasible": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 15,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "exact_match": {
+        "outcome": 0.8666666666666667,
+        "action": 0.7333333333333333,
+        "lifecycle": 0.8
+      },
+      "tools": {
+        "precision": 0.7692307692307693,
+        "recall": 0.8108108108108109,
+        "required_recall": 0.8108108108108109,
+        "forbidden_violation_rate": 0.0,
+        "by_supervisor_mode": {
+          "OPENAI": {
+            "case_count": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          },
+          "SAFE_FALLBACK": {
+            "case_count": 8,
+            "precision": 0.7631578947368421,
+            "recall": 0.8055555555555556,
+            "required_recall": 0.8055555555555556,
+            "forbidden_violation_rate": 0.0
+          },
+          "DETERMINISTIC_ORACLE": {
+            "case_count": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          },
+          "UNKNOWN": {
+            "case_count": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          }
+        }
+      },
+      "violations": {
+        "safety": 0,
+        "constraint": 15,
+        "epoch": 2,
+        "candidate": 0,
+        "safety_candidate": 2,
+        "blacklist": 0,
+        "stale": 0,
+        "security": 0
+      },
+      "safety_subset_infeasible_recall": 1.0,
+      "safety_gate_passed": false
+    },
+    "HOLDOUT": {
+      "case_count": 12,
+      "event_classification": {
+        "sample_count": 12,
+        "labels": {
+          "ROUTE_DEVIATION": {
+            "tp": 5,
+            "fp": 0,
+            "fn": 0,
+            "tn": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 5
+          },
+          "SOC_UNDERPERFORMANCE": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "tn": 9,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 3
+          },
+          "STALE_TELEMETRY": {
+            "tp": 2,
+            "fp": 0,
+            "fn": 0,
+            "tn": 10,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 2
+          },
+          "STATION_UNAVAILABLE": {
+            "tp": 5,
+            "fp": 0,
+            "fn": 0,
+            "tn": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 5
+          }
+        },
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "micro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      },
+      "infeasible": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 12,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "exact_match": {
+        "outcome": 0.6666666666666666,
+        "action": 0.6666666666666666,
+        "lifecycle": 0.6666666666666666
+      },
+      "tools": {
+        "precision": 0.75,
+        "recall": 0.9375,
+        "required_recall": 0.9375,
+        "forbidden_violation_rate": 0.0,
+        "by_supervisor_mode": {
+          "OPENAI": {
+            "case_count": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          },
+          "SAFE_FALLBACK": {
+            "case_count": 6,
+            "precision": 0.75,
+            "recall": 0.9375,
+            "required_recall": 0.9375,
+            "forbidden_violation_rate": 0.0
+          },
+          "DETERMINISTIC_ORACLE": {
+            "case_count": 6,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          },
+          "UNKNOWN": {
+            "case_count": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "required_recall": 1.0,
+            "forbidden_violation_rate": 0.0
+          }
+        }
+      },
+      "violations": {
+        "safety": 0,
+        "constraint": 12,
+        "epoch": 1,
+        "candidate": 0,
+        "safety_candidate": 3,
+        "blacklist": 0,
+        "stale": 0,
+        "security": 0
+      },
+      "safety_subset_infeasible_recall": 1.0,
+      "safety_gate_passed": false
+    }
+  }
+}

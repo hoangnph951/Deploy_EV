@@ -55,6 +55,7 @@ class OpenAIRecoveryAdvisor:
         api_key: str,
         model: str,
         timeout_seconds: float = 20.0,
+        base_url: str | None = None,
         client: OpenAI | None = None,
     ):
         self._model = model.strip()
@@ -62,7 +63,10 @@ class OpenAIRecoveryAdvisor:
         # Recovery is optional. Avoid automatic retries multiplying quota pressure;
         # the deterministic planner can continue without an AI suggestion.
         self._client = client or OpenAI(
-            api_key=api_key.strip(), timeout=timeout_seconds, max_retries=0
+            api_key=api_key.strip(),
+            base_url=base_url.strip() or None if base_url else None,
+            timeout=timeout_seconds,
+            max_retries=0,
         )
 
     def suggest_endpoint_access(

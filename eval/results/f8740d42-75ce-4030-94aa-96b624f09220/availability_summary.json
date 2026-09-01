@@ -1,0 +1,27 @@
+{
+  "sample_count": 37,
+  "available_count": 18,
+  "unavailable_count": 19,
+  "availability_percent": 48.64864864864865,
+  "error_windows": [
+    {
+      "started_offset_seconds": 1.00000761449337e-07,
+      "recovered_offset_seconds": 1.8516884000273421,
+      "downtime_seconds": 1.8516883000265807,
+      "failure_count": 17,
+      "first_error": "HEALTHY"
+    },
+    {
+      "started_offset_seconds": 3.8579229000024498,
+      "recovered_offset_seconds": null,
+      "downtime_seconds": 1.1420770999975502,
+      "failure_count": 2,
+      "first_error": "TIMEOUT"
+    }
+  ],
+  "total_downtime_seconds": 2.993765400024131,
+  "longest_downtime_seconds": 1.8516883000265807,
+  "mttr_seconds": 1.8516883000265807,
+  "duration_seconds": 5.0,
+  "limitation": "Local single-instance availability; not a production HA/SLO claim."
+}

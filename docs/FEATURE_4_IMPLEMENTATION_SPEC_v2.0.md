@@ -2496,3 +2496,43 @@ Final authority
 Một câu chốt cho toàn bộ thiết kế:
 
 > **Không phải mỗi event tạo ra một plan. Mỗi thay đổi có ý nghĩa tạo ra một phiên bản mới của trip context; AI Supervisor nhìn toàn bộ context mới nhất, điều tra bằng các tool được phép, và chỉ sau khi deterministic tools chứng minh safety mới đề xuất một plan/version mới cho người dùng xác nhận.**
+
+---
+
+# 44. Mentor review hardening — 2026-09-01
+
+## GPT tool selection và reflection
+
+GPT vẫn chịu trách nhiệm đánh giá tình huống, chọn tool trong allowlist và reflection sau từng observation. Tool policy chỉ chặn lựa chọn không hợp lệ; semantic invalid choice được retry có giới hạn. Với telemetry tươi và tools hoạt động, safe fallback phải tiếp tục chuỗi deterministic đến F1 candidate và `compare_plans`, không được dừng giữa luồng chỉ vì một lần chọn tool sai. GPS mô phỏng không đi qua tool kiểm tra tính hợp lệ của GPS thật.
+
+## Typed F1 outcome cho simulator
+
+`SimulationFaultCandidatePlanner` được bọc ở composition boundary của F4, không truyền fault xuống F1 và không thay đổi F1 production:
+
+- `NONE`: delegate nguyên trạng;
+- `F1_PROVIDER_FAILURE`: `INSUFFICIENT_EVIDENCE` + `SIMULATED_PROVIDER_FAILURE`;
+- `F1_PROVEN_INFEASIBLE`: `INFEASIBLE` + `SIMULATED_PROVEN_INFEASIBLE`.
+
+Fault chỉ hợp lệ khi config capability bật và telemetry source là `SIMULATED`. Provider failure không bao giờ bị diễn giải thành proven infeasible.
+
+## Lifecycle, safety và ownership
+
+- Route + SOC + station cùng snapshot được coalesce vào một epoch, dựng tối đa một candidate và một plan diff.
+- Candidate cũ chuyển `STALE_BY_NEW_CONTEXT`; confirm/reject cũ trả `409`.
+- Hai confirm đồng thời có đúng một winner: `[200, 409]`.
+- F2 và F4 confirm/reject đều kiểm tra owner; cross-user mutation trả `403/404` và không đổi plan/context.
+- Candidate chỉ được áp dụng sau explicit owner confirmation.
+- Khi owner từ chối candidate, UI giữ `ReplanningOutcome`, giữ simulator ở `AWAITING_DECISION`, khóa hai action trên candidate đã từ chối và hiển thị hướng dẫn dừng xe/gọi hỗ trợ. Không tự tiếp tục plan có rủi ro.
+- Public UI không hiển thị internal evidence reference IDs; audit backend vẫn giữ provenance đầy đủ.
+
+## Executable mentor coverage
+
+| Nhóm | Case IDs | Test chính |
+|---|---|---|
+| F4 happy/edge | `P210-F4-HAPPY-001`, `002`, `006`; `P210-F4-EDGE-003`, `007` | `test_f4_replanning_service.py`, `test_f4_supervisor_loop.py`, `test_f4.py` |
+| F4 failure | `P210-F4-UNHAPPY-004`, `005` | `test_f4_simulation_faults.py`, `test_f4.py` |
+| F4 AI trace | `P210-F4-AI-009`, `904`, `905` | `test_f4_supervisor.py`, `test_f4_supervisor_loop.py` |
+| F4 security | `P210-F4-SEC-008` | `test_f2.py`, `test_f4.py` |
+| Shared F3 preconditions | `P210-F3-HAPPY-001`, `004`; `P210-F3-EDGE-002`, `003`, `005`, `006` | `test_f3_monitoring.py`, `test_monitoring_service.py`, `test_planning.py` |
+
+Local verification checkpoint ngày 2026-09-01: focused F3/F4 lifecycle suite `139 passed`; station/F1 suite `58 passed`; frontend `23 passed` và production build thành công. Live deployment/retest evidence phải ghi riêng sau khi deployment SHA được xác minh; không dùng local result để giả lập live evidence.

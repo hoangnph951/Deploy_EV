@@ -101,6 +101,13 @@ class AssumptionSnapshot(BaseModel):
     vehicle_payload_kg: float = Field(..., ge=0)
     vehicle_profile_version: str
     vehicle_profile: VehicleProfileSnapshot | None = None
+    stale_station_hours_threshold: float = Field(default=24.0, gt=0)
+    route_deviation_km_threshold: float = Field(default=2.0, gt=0)
+    planner_algorithm_version: str = "adaptive-beam-v1"
+    energy_model_version: str = "energy-pilot-v1"
+    station_dataset_generation: str | None = None
+    routing_provider: str = "GOONG_DIRECTIONS"
+    road_version: str = "goong-car-v1"
     source: Literal["POLICY_CONFIG"] = "POLICY_CONFIG"
     created_at: datetime
 

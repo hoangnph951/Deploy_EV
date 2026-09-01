@@ -5,10 +5,10 @@ import {
   labelAction,
   labelHypothesis,
   labelObjective,
-  labelStage,
   labelStatus,
-  labelTool,
   labelTraceKind,
+  publicEvidenceSummary,
+  traceHeading,
 } from "../lib/replanningPresentation";
 import { getConfirmableF4Plan } from "../lib/f4Confirmation";
 import type { PlanProposal, ReplanningOutcome } from "../lib/types";
@@ -17,6 +17,7 @@ type Props = {
   run: ReplanningOutcome;
   confirming?: boolean;
   confirmedPlanId?: string;
+  rejectedPlanId?: string;
   onConfirmPlan?: (plan: PlanProposal) => Promise<boolean>;
   rejecting?: boolean;
   onRejectPlan?: (plan: PlanProposal) => Promise<boolean>;
@@ -25,18 +26,23 @@ type Props = {
 };
 
 export function ReplanningSupervisorPanel({
-  run, confirming = false, confirmedPlanId = "", onConfirmPlan,
+  run, confirming = false, confirmedPlanId = "", rejectedPlanId = "", onConfirmPlan,
   rejecting = false, onRejectPlan,
   refreshingTelemetry = false, onRefreshTelemetry,
 }: Props) {
   const constraints = run.context.unresolved_constraints;
   const confirmablePlan = getConfirmableF4Plan(run);
   const replacementConfirmed = confirmablePlan?.plan_id === confirmedPlanId;
+  const replacementRejected = confirmablePlan?.plan_id === rejectedPlanId;
   const candidatePlan = confirmablePlan;
   const evidence = Array.from(new Set([
     ...run.tool_runs.flatMap((tool) => tool.provenance_refs),
     ...run.reflection.evidence_refs,
   ]));
+  const evidenceSummary = publicEvidenceSummary(
+    evidence,
+    constraints.excluded_station_ids,
+  );
   const [visibleTraceCount, setVisibleTraceCount] = useState(1);
 
   useEffect(() => {
@@ -78,9 +84,8 @@ export function ReplanningSupervisorPanel({
       <small>Các bước kiểm tra của trợ lý</small>
       <ol className="f4-decision-timeline">
         {run.decision_trace.slice(0, visibleTraceCount).map((item, index) => <li className={`f4-trace-${item.stage.toLowerCase()}`} key={item.sequence}>
-          <div><strong>{labelStage(item.stage)}</strong><span>{index === visibleTraceCount - 1 && !traceComplete ? "Đang xử lý" : labelStatus(item.status)}</span></div>
+          <div><strong className="f4-trace-heading">{traceHeading(item.stage, item.tool)}</strong><span>{index === visibleTraceCount - 1 && !traceComplete ? "Đang xử lý" : labelStatus(item.status)}</span></div>
           <em>{labelTraceKind(item.stage, item.response_source)}</em>
-          {item.tool ? <p>{labelTool(item.tool)}</p> : null}
           {item.public_summary ? <small className="f4-public-summary">{item.public_summary}</small> : item.reason_codes.map((code) => <small key={code}>{explainReasonCode(code)}</small>)}
         </li>)}
       </ol>
@@ -88,9 +93,9 @@ export function ReplanningSupervisorPanel({
 
     <div className="f4-section">
       <small>Bằng chứng đã thu thập</small>
-      {evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Chưa có bằng chứng phù hợp để sử dụng.</p>}
+      <p>{evidenceSummary.evidenceNotice}</p>
       <p>Dữ liệu xe: <strong>{constraints.telemetry_blocked ? "Đã cũ hoặc thiếu" : "Còn hiệu lực"}</strong></p>
-      <p>Trạm đã loại trừ: <strong>{constraints.excluded_station_ids.join(", ") || "Không có"}</strong></p>
+      <p>{evidenceSummary.excludedStationsNotice}</p>
     </div>
 
     <div className="f4-section">
@@ -126,7 +131,7 @@ export function ReplanningSupervisorPanel({
       </div> : <p className="f4-no-charge-needed">
         Tuyến full replan không cần dừng sạc: F1 đã chứng minh SOC hiện tại đủ tới đích và vẫn giữ mức dự phòng.
       </p>}
-      <p className="f4-excluded-stations">Không đi qua trạm lỗi: <strong>{constraints.excluded_station_ids.join(", ")}</strong></p>
+      <p className="f4-excluded-stations">{evidenceSummary.excludedStationsNotice}</p>
     </div> : null}
 
     <div className="f4-section">
@@ -143,7 +148,11 @@ export function ReplanningSupervisorPanel({
       {confirmablePlan ? <a className="f4-view-route" href="#tracking-route-map">
         {replacementConfirmed ? "Xem hành trình đang đi trên bản đồ ↑" : "Xem tuyến thay thế trên bản đồ ↑"}
       </a> : null}
-      {run.action.requires_owner_confirmation ? <span className="f4-pending-confirmation">Đang chờ bạn xác nhận hoặc từ chối</span> : null}
+      {replacementRejected
+        ? <span className="f4-pending-confirmation">Phương án đã bị từ chối · Xe vẫn đang chờ quyết định an toàn</span>
+        : run.action.requires_owner_confirmation
+          ? <span className="f4-pending-confirmation">Đang chờ bạn xác nhận hoặc từ chối</span>
+          : null}
       {run.action.limitations.map((item) => <p className="f4-limitation" key={item}>⚠ {item}</p>)}
       {run.action.action === "REQUEST_NEW_TELEMETRY" && onRefreshTelemetry ? <button
         className="f4-refresh-telemetry-button"
@@ -155,13 +164,13 @@ export function ReplanningSupervisorPanel({
         {onRejectPlan ? <button
           className="f4-reject-button"
           type="button"
-          disabled={confirming || rejecting || replacementConfirmed}
+          disabled={confirming || rejecting || replacementConfirmed || replacementRejected}
           onClick={() => { void onRejectPlan(confirmablePlan); }}
-        >{rejecting ? "Đang từ chối…" : "Từ chối phương án"}</button> : null}
+        >{replacementRejected ? "Phương án đã bị từ chối" : rejecting ? "Đang từ chối…" : "Từ chối phương án"}</button> : null}
         <button
           className="f4-confirm-button"
           type="button"
-          disabled={confirming || rejecting || replacementConfirmed}
+          disabled={confirming || rejecting || replacementConfirmed || replacementRejected}
           onClick={() => { void onConfirmPlan(confirmablePlan); }}
         >{replacementConfirmed
             ? "✓ Hành trình mới đã được xác nhận"

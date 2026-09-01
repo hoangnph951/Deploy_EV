@@ -14,6 +14,10 @@ import httpx
 
 # pyrefly: ignore [missing-import]
 from src.packages.contracts.trips import DataProvenance
+from src.packages.core.trips.infrastructure.cache_backend import (
+    CacheBackend,
+    CacheBackendError,
+)
 from src.packages.core.trips.infrastructure.fixtures.station_fixtures import (
     StationSnapshotFixture,
     load_station_fixtures,
@@ -44,10 +48,133 @@ class CandidateStation:
     parking_fee: bool | None = None
     station_updated_at: datetime | None = None
     provenance: DataProvenance | None = None
+    catalog_location_id: int | None = None
+    detail_quality: Literal["VERIFIED", "PARTIAL", "UNVERIFIED"] = "PARTIAL"
 
 
 class StationProviderError(RuntimeError):
-    pass
+    """Typed station-provider failure that preserves recovery semantics."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "STATION_PROVIDER_UNAVAILABLE",
+        http_status: int | None = None,
+        retryable: bool = False,
+        retry_after_seconds: float | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.http_status = http_status
+        self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
+
+
+@dataclass(frozen=True)
+class ProviderCircuitState:
+    reason: str
+    opened_at: datetime
+    retry_after_seconds: float
+
+
+class ProviderCircuitBreaker:
+    """Prevent repeated calls while an upstream denial/rate limit is active."""
+
+    def __init__(
+        self,
+        *,
+        default_cooldown_seconds: float = 300.0,
+        cache_backend: CacheBackend | None = None,
+        cache_key: str | None = None,
+    ):
+        self._default_cooldown_seconds = max(1.0, default_cooldown_seconds)
+        self._lock = Lock()
+        self._state: ProviderCircuitState | None = None
+        self._open_until_monotonic = 0.0
+        self._cache_backend = cache_backend
+        self._cache_key = cache_key
+
+    def open(self, *, reason: str, retry_after_seconds: float | None = None) -> None:
+        cooldown = (
+            self._default_cooldown_seconds
+            if retry_after_seconds is None
+            else max(1.0, float(retry_after_seconds))
+        )
+        opened_at = datetime.now(UTC)
+        with self._lock:
+            self._state = ProviderCircuitState(
+                reason=reason,
+                opened_at=opened_at,
+                retry_after_seconds=cooldown,
+            )
+            self._open_until_monotonic = time.monotonic() + cooldown
+        if self._cache_backend is not None and self._cache_key:
+            try:
+                self._cache_backend.set(
+                    self._cache_key,
+                    json.dumps(
+                        {
+                            "state": "OPEN",
+                            "reason": reason,
+                            "opened_at": opened_at.isoformat(),
+                            "retry_at": opened_at.timestamp() + cooldown,
+                        },
+                        separators=(",", ":"),
+                    ).encode("utf-8"),
+                    ttl_seconds=cooldown,
+                )
+            except CacheBackendError:
+                pass
+
+    def current_state(self) -> ProviderCircuitState | None:
+        if self._cache_backend is not None and self._cache_key:
+            try:
+                shared = self._cache_backend.get(self._cache_key)
+                if shared is not None:
+                    payload = json.loads(shared.decode("utf-8"))
+                    opened_at = datetime.fromisoformat(payload["opened_at"])
+                    remaining = max(
+                        0.0,
+                        float(payload["retry_at"]) - datetime.now(UTC).timestamp(),
+                    )
+                    if remaining > 0:
+                        return ProviderCircuitState(
+                            reason=str(payload["reason"]),
+                            opened_at=opened_at,
+                            retry_after_seconds=remaining,
+                        )
+            except (
+                CacheBackendError,
+                ValueError,
+                TypeError,
+                KeyError,
+                json.JSONDecodeError,
+            ):
+                pass
+        with self._lock:
+            if self._state is None:
+                return None
+            if time.monotonic() >= self._open_until_monotonic:
+                self._state = None
+                self._open_until_monotonic = 0.0
+                return None
+            remaining = max(0.0, self._open_until_monotonic - time.monotonic())
+            return ProviderCircuitState(
+                reason=self._state.reason,
+                opened_at=self._state.opened_at,
+                retry_after_seconds=remaining,
+            )
+
+    def close(self) -> None:
+        with self._lock:
+            self._state = None
+            self._open_until_monotonic = 0.0
+        if self._cache_backend is not None and self._cache_key:
+            try:
+                self._cache_backend.delete(self._cache_key)
+            except CacheBackendError:
+                pass
 
 
 class VinFastAccessDeniedError(StationProviderError):
@@ -60,8 +187,12 @@ class VinFastAccessDeniedError(StationProviderError):
         http_status: int = 403,
         provider_status: str = "ACCESS_DENIED",
     ):
-        super().__init__(message)
-        self.http_status = http_status
+        super().__init__(
+            message,
+            code="PROVIDER_ACCESS_DENIED",
+            http_status=http_status,
+            retryable=False,
+        )
         self.provider_status = provider_status
 
 
@@ -147,13 +278,22 @@ class FallbackStationDataService:
                 return primary_candidates
 
         try:
-            return self._fallback.find_corridor_stations(**kwargs)
+            fallback_candidates = self._fallback.find_corridor_stations(**kwargs)
         except StationProviderError as exc:
-            if primary_error is None:
-                return []
             if isinstance(primary_error, VinFastAccessDeniedError):
                 raise primary_error from exc
-            raise StationProviderError("Primary and fallback station data providers are unavailable.") from exc
+            raise StationProviderError(
+                "Primary and fallback station data providers are unavailable.",
+                code=exc.code,
+                http_status=exc.http_status,
+                retryable=exc.retryable,
+                retry_after_seconds=exc.retry_after_seconds,
+            ) from exc
+        if fallback_candidates:
+            return fallback_candidates
+        raise StationProviderError(
+            "Station web search completed without a grounded candidate for this route."
+        )
 
     def find_station_window(self, **kwargs) -> list[CandidateStation]:
         target = max(1, int(kwargs.get("target_candidate_count", 8)))
@@ -172,13 +312,23 @@ class FallbackStationDataService:
             if primary_error is not None and not primary:
                 if isinstance(primary_error, VinFastAccessDeniedError):
                     raise primary_error from exc
-                raise StationProviderError("Primary and fallback station data providers are unavailable.") from exc
+                raise StationProviderError(
+                    "Primary and fallback station data providers are unavailable.",
+                    code=exc.code,
+                    http_status=exc.http_status,
+                    retryable=exc.retryable,
+                    retry_after_seconds=exc.retry_after_seconds,
+                ) from exc
+            if not primary:
+                raise StationProviderError(
+                    "Fallback station search is unavailable and the primary search returned no candidates."
+                ) from exc
             fallback = []
 
         merged = {station.station_id: station for station in primary}
         for station in fallback:
             merged.setdefault(station.station_id, station)
-        return sorted(
+        ordered = sorted(
             merged.values(),
             key=lambda station: (
                 station.distance_from_origin_km,
@@ -186,14 +336,32 @@ class FallbackStationDataService:
                 -station.max_power_kw,
             ),
         )
+        if ordered:
+            return ordered
+        raise StationProviderError(
+            "Station search completed without a grounded candidate in the requested window."
+        )
 
     def find_official_station_window(self, **kwargs) -> list[CandidateStation]:
         """Search only the authoritative provider during deterministic planning."""
-        return _find_station_window(self._primary, **kwargs)
+        try:
+            return _find_station_window(self._primary, **kwargs)
+        except StationProviderError:
+            # A stale/empty local catalog must not mask the live official
+            # VinFast locator. This fallback remains authoritative (unlike the
+            # OpenAI web-search recovery provider).
+            if isinstance(self._fallback, VinFastStationDataService):
+                return _find_station_window(self._fallback, **kwargs)
+            raise
 
     def find_recovery_station_window(self, **kwargs) -> list[CandidateStation]:
         """Search only the secondary provider after deterministic planning fails."""
-        return _find_station_window(self._fallback, **kwargs)
+        candidates = _find_station_window(self._fallback, **kwargs)
+        if candidates:
+            return candidates
+        raise StationProviderError(
+            "Station web search completed without a grounded candidate in the recovery window."
+        )
 
 
 class FixtureStationDataService:
@@ -975,6 +1143,59 @@ def _normalize_connector(standard: str) -> str:
     if "62196_T2" in normalized or "TYPE_2" in normalized:
         return "TYPE2"
     return normalized
+
+
+def _raise_for_station_http_status(response: httpx.Response, *, resource: str) -> None:
+    status = response.status_code
+    if status in {401, 403}:
+        raise StationProviderError(
+            f"VinFast {resource} access was denied.",
+            code="PROVIDER_ACCESS_DENIED",
+            http_status=status,
+            retryable=False,
+        )
+    if status == 429:
+        raise StationProviderError(
+            f"VinFast {resource} was rate limited.",
+            code="PROVIDER_RATE_LIMITED",
+            http_status=status,
+            retryable=False,
+            retry_after_seconds=_station_retry_after_seconds(response.headers),
+        )
+    if status == 404:
+        raise StationProviderError(
+            f"VinFast {resource} was not found.",
+            code="PROVIDER_ENTITY_NOT_FOUND",
+            http_status=status,
+            retryable=False,
+        )
+    if status >= 500:
+        raise StationProviderError(
+            f"VinFast {resource} is temporarily unavailable.",
+            code="PROVIDER_TRANSIENT_ERROR",
+            http_status=status,
+            retryable=True,
+        )
+    if status >= 400:
+        raise StationProviderError(
+            f"VinFast {resource} rejected the request.",
+            code="PROVIDER_REQUEST_REJECTED",
+            http_status=status,
+            retryable=False,
+        )
+
+
+def _station_retry_after_seconds(headers: object) -> float | None:
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return None
+    raw = getter("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
 
 
 def _find_station_window(service: StationService, **kwargs) -> list[CandidateStation]:

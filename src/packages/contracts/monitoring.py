@@ -9,6 +9,7 @@ from src.packages.contracts.trips import PlanProposal
 from src.packages.core.monitoring.domain.risk import SOCRiskState
 
 Provenance = Literal["REAL_GPS", "REAL_API", "SIMULATED", "CACHED_SNAPSHOT", "MANUAL"]
+SimulationFault = Literal["NONE", "F1_PROVIDER_FAILURE", "F1_PROVEN_INFEASIBLE"]
 EventType = Literal[
     "ROUTE_DEVIATION",
     "SOC_UNDERPERFORMANCE",
@@ -30,6 +31,7 @@ class SimulatorStartRequest(BaseModel):
     plan_id: str | None = None
     plan: PlanProposal | None = None
     seed: int = 42
+    simulation_fault: SimulationFault = "NONE"
     tick_interval_seconds: float = Field(default=1.0, gt=0, le=60)
     speed_multiplier: float | None = Field(default=None, gt=0, le=100)
     scenario: Literal[
@@ -164,6 +166,8 @@ class MonitoringEvent(BaseModel):
 class SimulationState(BaseModel):
     trip_id: str
     plan_id: str
+    seed: int
+    simulation_fault: SimulationFault = "NONE"
     status: SimulationStatus
     selected_scenario: str
     telemetry: TelemetrySnapshot | None = None

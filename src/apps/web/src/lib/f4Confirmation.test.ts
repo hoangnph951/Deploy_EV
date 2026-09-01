@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   completeF4Confirmation,
+  completeF4Rejection,
   getConfirmableF4Plan,
   isPendingF4Plan,
 } from "./f4Confirmation.ts";
@@ -56,6 +57,16 @@ test("keeps the F4 explanation after confirming its replacement plan", () => {
 
   assert.equal(next.run, run);
   assert.equal(next.confirmedPlanId, "plan-v2");
+});
+
+test("keeps the F4 decision state after rejecting an unsafe replacement", () => {
+  const run = { agent_run_id: "run-1" };
+
+  const next = completeF4Rejection(run as never, "plan-v2");
+
+  assert.equal(next.run, run);
+  assert.equal(next.rejectedPlanId, "plan-v2");
+  assert.equal(next.continueAvailable, false);
 });
 
 test("identifies the pending F4 plan that needs confirmation in F3", () => {

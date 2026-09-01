@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from src.apps.api.bootstrap.config import Settings, get_settings
 from src.packages.contracts.monitoring import (
     SimulationDecisionRequest,
     SimulationState,
@@ -8,8 +9,17 @@ from src.packages.contracts.monitoring import (
 from src.packages.core.auth.api.dependencies import get_current_user_id
 from src.packages.core.monitoring.api.dependencies import get_monitoring_simulator_service
 from src.packages.core.monitoring.application.service import MonitoringSimulatorService
+from src.packages.core.trips.application.errors import AppError
 
 router = APIRouter(prefix="/simulator/trips", tags=["monitoring", "simulator"])
+capabilities_router = APIRouter(prefix="/simulator", tags=["simulator"])
+
+
+@capabilities_router.get("/capabilities")
+def get_simulator_capabilities(
+    settings: Settings = Depends(get_settings),
+) -> dict[str, bool]:
+    return {"fault_injection_enabled": settings.simulator_fault_injection_enabled}
 
 
 @router.post("/{trip_id}/start", response_model=SimulationState)
@@ -18,7 +28,14 @@ def start_simulation(
     request: SimulatorStartRequest,
     user_id: str = Depends(get_current_user_id),
     service: MonitoringSimulatorService = Depends(get_monitoring_simulator_service),
+    settings: Settings = Depends(get_settings),
 ) -> SimulationState:
+    if request.simulation_fault != "NONE" and not settings.simulator_fault_injection_enabled:
+        raise AppError(
+            "SIMULATOR_FAULT_INJECTION_DISABLED",
+            403,
+            "Simulator fault injection is disabled.",
+        )
     return service.start(trip_id, user_id, request)
 
 

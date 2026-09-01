@@ -52,6 +52,7 @@ class OpenAIWebStationDataService:
         model: str,
         geocoder: Geocoder,
         timeout_seconds: float = 20.0,
+        base_url: str | None = None,
         allowed_domains: tuple[str, ...] = (),
         max_candidates: int = 12,
         client: OpenAI | None = None,
@@ -64,7 +65,12 @@ class OpenAIWebStationDataService:
         self._max_candidates = max(1, min(max_candidates, 20))
         self._window_cache: dict[tuple, list[CandidateStation]] = {}
         self._window_cache_lock = Lock()
-        self._client = client or OpenAI(api_key=api_key.strip(), timeout=timeout_seconds)
+        self._client = client or OpenAI(
+            api_key=api_key.strip(),
+            base_url=base_url.strip() or None if base_url else None,
+            timeout=timeout_seconds,
+            max_retries=0,
+        )
         self._evidence_repository = evidence_repository
 
     def find_corridor_stations(
@@ -116,6 +122,17 @@ class OpenAIWebStationDataService:
                 timeout=self._timeout_seconds,
             )
         except (OpenAIError, ValueError, TypeError) as exc:
+            # Keep authentication/configuration failures distinguishable from
+            # an empty search result. This is essential for operators: a
+            # 401 cannot be fixed by widening the route corridor.
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 401:
+                raise StationProviderError(
+                    "OpenAI station web search authentication failed.",
+                    code="OPENAI_AUTHENTICATION_FAILED",
+                    http_status=401,
+                    retryable=False,
+                ) from exc
             raise StationProviderError("OpenAI station web search is unavailable.") from exc
 
         parsed = response.output_parsed

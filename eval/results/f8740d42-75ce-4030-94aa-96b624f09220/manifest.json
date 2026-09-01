@@ -1,0 +1,21 @@
+{
+  "run_id": "f8740d42-75ce-4030-94aa-96b624f09220",
+  "commit_sha": "b379dc1309cd4a1d53b9102200211fa152c4d380",
+  "dirty_worktree": true,
+  "started_at": "2026-09-01 13:00:23.239579+00:00",
+  "machine": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python_version": "3.11.14 (main, Oct 14 2025, 21:21:22) [MSC v.1944 64 bit (AMD64)]",
+    "cpu_count": 12
+  },
+  "dataset_version": "f3-f4-golden-v1",
+  "runner_version": "f3-f4-evaluation-runner-v1",
+  "judge_model": null,
+  "judge_prompt_version": null,
+  "provider_modes": {
+    "supervisor": "fallback"
+  },
+  "diff_hash": "0d3b2529e1a7e89706bd60ba0020571e4f2e585860f2e6f15473f76e554ee669",
+  "stages": {},
+  "artifact_checksums": {}
+}

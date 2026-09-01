@@ -8,11 +8,11 @@ from src.packages.contracts.replanning import ActiveConstraintContext
 ALLOWED_TOOLS = {
     "project_current_plan", "get_verified_route", "estimate_energy",
     "search_verified_stations", "check_telemetry", "build_candidate", "compare_plans",
-    "inspect_telemetry", "inspect_route", "inspect_energy",
+    "inspect_route", "inspect_energy",
     "nearest_station_reachability", "inspect_stations",
     "build_minimal_substitution", "build_full_replan",
 }
-PLANNING_TOOLS = ALLOWED_TOOLS - {"check_telemetry", "inspect_telemetry"}
+PLANNING_TOOLS = ALLOWED_TOOLS - {"check_telemetry"}
 
 
 @dataclass(frozen=True)

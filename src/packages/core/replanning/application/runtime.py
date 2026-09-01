@@ -29,15 +29,32 @@ class ReplanningRuntimeStore:
         self.events: dict[str, list[MonitoringEvent]] = {}
         self.idempotent_runs: dict[str, str] = {}
 
-    def initial_context(self, trip, plan_count: int) -> TripContextSnapshot:
+    def initial_context(
+        self,
+        trip,
+        plan_count: int,
+        *,
+        pending_plan_version: int | None = None,
+    ) -> TripContextSnapshot:
         existing = self.contexts.get(trip.trip_id)
         if existing is not None:
             return existing
+        confirmed_plan_version = getattr(trip, "confirmed_plan_version", plan_count)
+        confirmed_plan_version = confirmed_plan_version or 0
+        if self.audit_repository is not None:
+            persisted = self.audit_repository.get_latest_context(trip.trip_id)
+            if persisted is not None:
+                persisted = persisted.model_copy(update={
+                    "current_confirmed_plan_version": confirmed_plan_version,
+                    "pending_plan_version": pending_plan_version,
+                })
+                self.contexts[trip.trip_id] = persisted
+                return persisted
         context = TripContextSnapshot(
             trip_id=trip.trip_id,
             context_version=1,
-            current_confirmed_plan_version=plan_count,
-            pending_plan_version=plan_count or None,
+            current_confirmed_plan_version=confirmed_plan_version,
+            pending_plan_version=pending_plan_version,
             telemetry_snapshot_id="INITIAL",
             current_lat=trip.origin.lat,
             current_lng=trip.origin.lng,

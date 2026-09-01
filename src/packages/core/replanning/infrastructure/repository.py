@@ -4,7 +4,10 @@ import hashlib
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from sqlalchemy import select
+
 from src.packages.contracts.monitoring import MonitoringEvent
+from src.packages.contracts.replanning import TripContextSnapshot
 from src.packages.core.replanning.application.service import ReplanningOutcome
 from src.packages.core.replanning.infrastructure.models import (
     AgentRunEventModel,
@@ -26,6 +29,26 @@ class SqlAlchemyReplanningAuditRepository:
         self.engine, self.session_factory = build_session_factory(database_url)
         if ensure_schema:
             Base.metadata.create_all(self.engine)
+
+    def get_latest_context(self, trip_id: str) -> TripContextSnapshot | None:
+        with self.session_factory() as session:
+            snapshot = session.scalar(
+                select(TripContextSnapshotModel)
+                .where(TripContextSnapshotModel.trip_id == trip_id)
+                .order_by(TripContextSnapshotModel.context_version.desc())
+                .limit(1)
+            )
+            if snapshot is None:
+                return None
+            context = TripContextSnapshot.model_validate(snapshot.snapshot_json)
+            if (
+                context.trip_id != snapshot.trip_id
+                or context.context_version != snapshot.context_version
+            ):
+                raise ValueError(
+                    "Persisted trip context identity does not match its database row."
+                )
+            return context
 
     def save_run(self, outcome: ReplanningOutcome, events: list[MonitoringEvent]) -> None:
         now = datetime.now(UTC)

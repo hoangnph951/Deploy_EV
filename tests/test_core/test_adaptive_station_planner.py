@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from src.packages.agent.planning.tools.adaptive_station_planner import (
     AdaptiveSearchProfile,
     AdaptiveStationPlanner,
+    _middle_then_closer_batches,
 )
 from src.packages.contracts.trips import AssumptionSnapshot, DataProvenance, EnvironmentSnapshot
 from src.packages.core.trips.domain.entities import VehicleProfile
@@ -11,7 +12,10 @@ from src.packages.core.trips.domain.station_graph import StationEdge
 from src.packages.core.trips.infrastructure.energy_tool import EnergyTool
 from src.packages.core.trips.infrastructure.feasibility_tool import FeasibilityTool
 from src.packages.core.trips.infrastructure.routing import RouteSegmentData, RoutingResult
-from src.packages.core.trips.infrastructure.station_service import CandidateStation
+from src.packages.core.trips.infrastructure.station_service import (
+    CandidateStation,
+    StationProviderError,
+)
 
 
 class LinearRoutingProvider:
@@ -75,6 +79,13 @@ class WindowStationService:
     def find_recovery_station_window(self, **kwargs):
         self.recovery_calls.append(kwargs["max_detail_candidates"])
         return self.find_official_station_window(**kwargs)
+
+
+class NarrowProfileUnavailableStationService(WindowStationService):
+    def find_official_station_window(self, **kwargs):
+        if kwargs["max_corridor_buffer_km"] < 10.0:
+            raise StationProviderError("narrow corridor temporarily unavailable")
+        return super().find_official_station_window(**kwargs)
 
 
 def _station(progress: float) -> CandidateStation:
@@ -215,6 +226,47 @@ def test_required_charging_stop_builds_full_multi_stop_chain() -> None:
         "station-750",
         "station-900",
     ]
+
+
+def test_failed_narrow_window_does_not_abort_wider_corridor_search() -> None:
+    routing = LinearRoutingProvider()
+    base_route = routing.get_route(0.0, 0.0, 0.0, 10.0)
+    result = AdaptiveStationPlanner(
+        routing_provider=routing,
+        station_service=NarrowProfileUnavailableStationService(),
+        energy_tool=EnergyTool(),
+        feasibility_tool=FeasibilityTool(),
+    ).plan(
+        base_route=base_route,
+        origin_lat=0.0,
+        origin_lng=0.0,
+        destination_lat=0.0,
+        destination_lng=10.0,
+        origin_name="TP.HCM",
+        destination_name="Hà Nội",
+        initial_soc_percent=20.0,
+        vehicle_profile=_vehicle(),
+        assumptions=_assumptions(),
+        environment=_environment(),
+        search_profiles=(
+            AdaptiveSearchProfile(5.0, 30.0, 45.0),
+            AdaptiveSearchProfile(10.0, 30.0, 45.0),
+        ),
+        require_charging_stop=True,
+    )
+
+    assert result.validated
+    assert len(result.validated[0].energy.charging_stops) == 7
+    assert result.provider_unavailable is False
+
+
+def test_candidate_validation_starts_in_middle_then_retreats_closer() -> None:
+    batches = _middle_then_closer_batches(
+        [_station(progress) for progress in range(10, 100, 10)]
+    )
+
+    assert [station.distance_from_origin_km for station in batches[0]] == [50, 40, 60]
+    assert [station.distance_from_origin_km for station in batches[1]] == [30, 20, 10]
 
 
 def test_recovery_source_is_only_used_when_explicitly_requested() -> None:

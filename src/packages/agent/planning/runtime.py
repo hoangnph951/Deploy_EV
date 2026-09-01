@@ -30,6 +30,12 @@ class PlanningRuntime:
     energy_tool: EnergyTool
     feasibility_tool: FeasibilityTool
     plan_ranker: SafePlanRanker
+    station_edge_repository: StationEdgeRepository | None = None
+    station_graph_enabled: bool = False
+    station_graph_routing_provider: str = "GOONG_DIRECTIONS"
+    station_graph_routing_profile: str = "car"
+    station_graph_road_version: str = "goong-car-v1"
+    station_graph_edge_max_age_seconds: float = 86400.0
 
     def with_routing_provider(self, provider: RoutingProvider) -> PlanningRuntime:
         return replace(self, routing_provider=provider)

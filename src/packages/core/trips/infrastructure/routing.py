@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import hashlib
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -8,6 +9,12 @@ from threading import Lock
 from typing import Protocol
 
 import httpx
+
+from src.packages.core.trips.infrastructure.cache_backend import (
+    CacheBackend,
+    CacheBackendError,
+    InMemoryCacheBackend,
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,25 @@ class RoutingUnavailableError(RoutingProviderError):
         self.provider_status = provider_status
         self.retryable = retryable
         self.retry_after_seconds = retry_after_seconds
+
+
+def route_cache_key(
+    *,
+    provider: str,
+    origin_lat: float,
+    origin_lng: float,
+    dest_lat: float,
+    dest_lng: float,
+    waypoints: list[tuple[float, float]] | None = None,
+) -> str:
+    """Return a stable, provider-scoped cache key for a route request."""
+    ordered = ";".join(
+        f"{lat:.6f},{lng:.6f}" for lat, lng in (waypoints or [])
+    )
+    waypoint_hash = hashlib.sha256(ordered.encode("utf-8")).hexdigest()[:16]
+    origin = f"{origin_lat:.6f},{origin_lng:.6f}"
+    destination = f"{dest_lat:.6f},{dest_lng:.6f}"
+    return f"route:v1:{provider}:{origin}:{destination}:{waypoint_hash}"
 
 
 def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -201,6 +227,7 @@ class GoongRoutingProvider:
         rate_limit_cooldown_seconds: float = 30.0,
         min_request_interval_seconds: float = 0.2,
         route_cache_ttl_seconds: float = 300.0,
+        cache_backend: CacheBackend | None = None,
     ):
         self._api_key = api_key.strip()
         self._base_url = base_url.rstrip("/")
@@ -213,8 +240,7 @@ class GoongRoutingProvider:
         self._next_request_at = 0.0
         self._request_pacing_lock = Lock()
         self._route_cache_ttl_seconds = max(0.0, route_cache_ttl_seconds)
-        self._route_cache: dict[tuple, tuple[float, RoutingResult]] = {}
-        self._route_cache_lock = Lock()
+        self._cache_backend = cache_backend or InMemoryCacheBackend(max_entries=512)
         # A waypoint is a required charging stop, not merely a hint. Goong
         # normally routes within a few metres of it; reject a response that
         # silently falls back to the direct origin-destination route.
@@ -233,18 +259,20 @@ class GoongRoutingProvider:
                 "GOONG_API_KEY is not configured for Goong Directions."
             )
 
-        cache_key = (
-            round(origin_lat, 6),
-            round(origin_lng, 6),
-            round(dest_lat, 6),
-            round(dest_lng, 6),
-            tuple((round(lat, 6), round(lng, 6)) for lat, lng in (waypoints or [])),
+        cache_key = route_cache_key(
+            provider="GOONG_DIRECTIONS",
+            origin_lat=origin_lat,
+            origin_lng=origin_lng,
+            dest_lat=dest_lat,
+            dest_lng=dest_lng,
+            waypoints=waypoints,
         )
-        now_monotonic = time.monotonic()
-        with self._route_cache_lock:
-            cached = self._route_cache.get(cache_key)
-            if cached and now_monotonic - cached[0] <= self._route_cache_ttl_seconds:
-                return cached[1]
+        try:
+            cached = self._cache_backend.get(cache_key)
+            if cached is not None:
+                return _deserialize_route(cached)
+        except (CacheBackendError, ValueError, TypeError, KeyError):
+            pass
 
         with self._rate_limit_lock:
             remaining = self._rate_limited_until - time.monotonic()
@@ -393,14 +421,14 @@ class GoongRoutingProvider:
                     source_url=f"{self._base_url}/Direction",
                     retrieved_at=datetime.now(UTC),
                 )
-                with self._route_cache_lock:
-                    if len(self._route_cache) >= 512:
-                        oldest_key = min(
-                            self._route_cache,
-                            key=lambda key: self._route_cache[key][0],
-                        )
-                        self._route_cache.pop(oldest_key, None)
-                    self._route_cache[cache_key] = (time.monotonic(), result)
+                try:
+                    self._cache_backend.set(
+                        cache_key,
+                        _serialize_route(result),
+                        ttl_seconds=self._route_cache_ttl_seconds,
+                    )
+                except CacheBackendError:
+                    pass
                 return result
             except RoutingUnavailableError as exc:
                 if not exc.retryable or exc.http_status == 429:
@@ -431,3 +459,34 @@ def _retry_after_seconds(headers: object) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed >= 0 else None
+
+
+def _serialize_route(route: RoutingResult) -> bytes:
+    import json
+
+    payload = {
+        "polyline": route.polyline,
+        "distance_km": route.distance_km,
+        "duration_min": route.duration_min,
+        "segments": [segment.__dict__ for segment in route.segments],
+        "provider": route.provider,
+        "source_url": route.source_url,
+        "retrieved_at": route.retrieved_at.isoformat() if route.retrieved_at else None,
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def _deserialize_route(value: bytes) -> RoutingResult:
+    import json
+
+    payload = json.loads(value.decode("utf-8"))
+    retrieved_at = payload.get("retrieved_at")
+    return RoutingResult(
+        polyline=payload["polyline"],
+        distance_km=float(payload["distance_km"]),
+        duration_min=float(payload["duration_min"]),
+        segments=[RouteSegmentData(**segment) for segment in payload.get("segments", [])],
+        provider=str(payload["provider"]),
+        source_url=str(payload.get("source_url", "")),
+        retrieved_at=datetime.fromisoformat(retrieved_at) if retrieved_at else None,
+    )

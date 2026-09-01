@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from src.packages.agent.replanning.fallback import ConservativeSupervisor
+from src.packages.agent.replanning.fallback import ConservativeSupervisor, SupervisorTurn
 from src.packages.agent.replanning.schemas import ActionProposalDraft
 from src.packages.contracts.monitoring import MonitoringEvent, TelemetrySnapshot
 from src.packages.contracts.replanning import ActiveConstraintContext, TripContextSnapshot
@@ -31,6 +31,14 @@ class RecordingPlanner:
             "plan_version": 5,
             "feasibility_verdict": verdict,
             "strategy": kwargs.get("strategy"),
+            "plan_diff": {
+                "distance_delta_km": 2.0,
+                "duration_delta_min": 3.0,
+                "final_soc_delta_percent": 4.0,
+                "reserve_margin_delta_percent": 4.0,
+                "removed_station_ids": ["ST-10"],
+                "added_station_ids": ["ST-20"],
+            },
         }
 
 
@@ -78,7 +86,7 @@ def test_multi_event_run_builds_at_most_one_candidate_with_blacklist() -> None:
     assert len(planner.calls) == 1
     assert planner.calls[0]["excluded_station_ids"] == ["ST-10"]
     assert [run.tool for run in outcome.tool_runs] == [
-        "inspect_telemetry", "project_current_plan", "inspect_energy",
+        "project_current_plan", "inspect_energy",
         "nearest_station_reachability", "inspect_stations",
         "build_minimal_substitution", "compare_plans",
     ]
@@ -110,6 +118,20 @@ def test_route_soc_and_station_events_share_one_epoch_and_one_candidate() -> Non
     assert outcome.context.unresolved_constraints.excluded_station_ids == ["ST-10"]
     assert len(planner.calls) == 1
     assert outcome.candidate is not None
+    assert len([
+        run for run in outcome.tool_runs if run.tool.startswith("build_")
+    ]) == 1
+    assert outcome.plan_diff is not None
+    assert outcome.action.requires_owner_confirmation is True
+    assert {
+        "ASSESSING",
+        "DIAGNOSING",
+        "REFLECTING",
+        "BUILDING_CANDIDATE",
+        "COMPARING_PLANS",
+        "PROPOSING_ACTION",
+        "GUARDING_ACTION",
+    }.issubset({item.stage for item in outcome.decision_trace})
 
 
 def test_stale_telemetry_blocks_planning_when_other_events_share_the_epoch() -> None:
@@ -130,6 +152,7 @@ def test_stale_telemetry_blocks_planning_when_other_events_share_the_epoch() -> 
     assert outcome.action.action == "REQUEST_NEW_TELEMETRY"
     assert outcome.candidate is None
     assert planner.calls == []
+    assert outcome.tool_runs == []
 
 
 def test_station_no_longer_in_remaining_trip_continues_current_plan() -> None:
@@ -151,7 +174,7 @@ def test_station_no_longer_in_remaining_trip_continues_current_plan() -> None:
     assert outcome.candidate is None
     assert planner.calls == []
     assert [run.tool for run in outcome.tool_runs] == [
-        "inspect_telemetry", "project_current_plan",
+        "project_current_plan",
     ]
 
 
@@ -206,7 +229,7 @@ def test_stale_telemetry_blocks_candidate_generation() -> None:
     assert outcome.status == "INSUFFICIENT_EVIDENCE"
     assert outcome.action.action == "REQUEST_NEW_TELEMETRY"
     assert planner.calls == []
-    assert [run.tool for run in outcome.tool_runs] == ["inspect_telemetry"]
+    assert outcome.tool_runs == []
 
 
 def test_provider_failure_is_insufficient_evidence_not_infeasible() -> None:
@@ -236,6 +259,42 @@ class DraftingSupervisor(ConservativeSupervisor):
     def draft_action(self, **kwargs) -> ActionProposalDraft:
         self.draft_calls += 1
         return self.draft
+
+
+class UnsafeStaleTelemetrySupervisor(ConservativeSupervisor):
+    def assess(self, **kwargs) -> SupervisorTurn:
+        turn = super().assess(**kwargs)
+        return SupervisorTurn(
+            assessment=turn.assessment,
+            decision=turn.decision,
+            action=ActionProposalDraft(
+                action="PROPOSE_REPLAN",
+                reason_codes=["UNSAFE_MODEL_ACTION"],
+                evidence_refs=[],
+                user_message="Apply a route built from stale telemetry.",
+                limitations=[],
+                requires_owner_confirmation=True,
+                response_source="OPENAI",
+            ),
+        )
+
+
+def test_stale_telemetry_ignores_unsafe_supervisor_action() -> None:
+    planner = RecordingPlanner()
+    stale = telemetry().model_copy(update={"freshness": "STALE", "age_seconds": 61})
+
+    outcome = ReplanningService(
+        planner=planner,
+        supervisor=UnsafeStaleTelemetrySupervisor(),
+    ).process(
+        previous_context=context(), telemetry=stale,
+        events=[event("event-stale-unsafe-action", "STALE_TELEMETRY")],
+    )
+
+    assert outcome.status == "INSUFFICIENT_EVIDENCE"
+    assert outcome.action.action == "REQUEST_NEW_TELEMETRY"
+    assert outcome.action.response_source == "DETERMINISTIC"
+    assert planner.calls == []
 
 
 def test_service_uses_supervisor_action_draft_after_deterministic_feasibility() -> None:

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -42,7 +43,8 @@ class Settings(BaseSettings):
     openai_replanning_enabled: bool = True
     openai_replanning_timeout_seconds: float = Field(default=30.0, gt=1.0, le=60.0)
     replanning_max_tool_calls: int = Field(default=6, ge=1, le=12)
-    replanning_max_llm_turns: int = Field(default=12, ge=1, le=16)
+    replanning_max_llm_turns: int = Field(default=16, ge=1, le=16)
+    simulator_fault_injection_enabled: bool = False
 
     database_url: str = "sqlite:///./data/app.db"
     chroma_persist_dir: str = "./data/chroma"
@@ -69,6 +71,42 @@ class Settings(BaseSettings):
     open_meteo_elevation_url: str = "https://api.open-meteo.com/v1/elevation"
     open_meteo_timeout_seconds: float = Field(default=8.0, gt=0.1, le=30.0)
     environment_provider: Literal["fixture", "open_meteo"] = "open_meteo"
+    station_catalog_db_enabled: bool = True
+    station_dataset_refresh_seconds: float = Field(default=300.0, ge=30.0)
+    station_dataset_max_stale_seconds: float = Field(default=86400.0, ge=300.0)
+    station_detail_refresh_seconds: float = Field(default=300.0, ge=30.0)
+    station_detail_max_stale_seconds: float = Field(default=86400.0, ge=300.0)
+    station_graph_enabled: bool = False
+    station_graph_routing_provider: Literal["goong", "osrm"] = "osrm"
+    station_graph_max_neighbors: int = Field(default=40, ge=1, le=100)
+    station_graph_coarse_radius_km: float = Field(default=450.0, gt=0.0)
+    station_graph_max_road_leg_km: float = Field(default=500.0, gt=0.0)
+    station_graph_edge_max_age_seconds: float = Field(default=86400.0, ge=60.0)
+    station_graph_road_version: str = "osrm-26.6.5-debian-driving-vietnam-v1"
+    station_graph_build_origin_limit: int = Field(default=250, ge=1, le=5000)
+    osrm_base_url: str = "http://127.0.0.1:5000"
+    osrm_profile: str = "driving"
+    osrm_timeout_seconds: float = Field(default=15.0, gt=0.1, le=120.0)
+    osrm_max_retries: int = Field(default=1, ge=0, le=5)
+    osrm_max_table_locations: int = Field(default=100, ge=2, le=1000)
+    osrm_road_version_file: str = "data/osrm/road-version.txt"
+    redis_cache_enabled: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    persist_all_proposals_enabled: bool = True
+    planner_algorithm_version: str = "adaptive-beam-v1"
+    energy_model_version: str = "energy-pilot-v1"
+
+
+def resolve_station_graph_road_version(settings: Settings) -> str:
+    if settings.station_graph_routing_provider != "osrm":
+        return settings.station_graph_road_version
+    path = Path(settings.osrm_road_version_file)
+    if not path.is_file():
+        return settings.station_graph_road_version
+    value = path.read_text(encoding="utf-8").strip()
+    if not value or len(value) > 128:
+        raise ValueError("OSRM road-version file is empty or exceeds schema limits.")
+    return value
 
 
 @lru_cache

@@ -70,7 +70,11 @@ class OpenMeteoEnvironmentProvider:
         elevation_base_url: str = "https://api.open-meteo.com/v1/elevation",
         timeout_seconds: float = 8.0,
         elevation_sample_limit: int = 80,
-        max_retries: int = 2,
+        # Keep the default bounded for interactive planning. Callers that
+        # need provider-level retries can opt in explicitly; otherwise two
+        # Open-Meteo endpoints at an 8s timeout must not hold the planner for
+        # an unbounded retry cascade.
+        max_retries: int = 0,
         retry_base_delay_seconds: float = 0.5,
         cache_ttl_seconds: float = 10800.0,
         fallback_enabled: bool = True,

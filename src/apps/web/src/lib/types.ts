@@ -417,10 +417,14 @@ export type ReplanningPlanDecisionResponse = {
 export type MonitoringEventType = "ROUTE_DEVIATION" | "SOC_UNDERPERFORMANCE" | "STATION_UNAVAILABLE" | "STALE_TELEMETRY";
 export type CompositeMonitoringEventType = Exclude<MonitoringEventType, "STALE_TELEMETRY">;
 export type SimulationScenarioSelection = "RANDOM" | "NORMAL" | "MULTI_EVENT" | MonitoringEventType;
+export type SimulationFault = "NONE" | "F1_PROVIDER_FAILURE" | "F1_PROVEN_INFEASIBLE";
+export type SimulatorCapabilities = { fault_injection_enabled: boolean };
 export type ReplanningContextResponse = { context_version: number };
 export type SimulationState = {
   trip_id: string;
   plan_id: string;
+  seed: number;
+  simulation_fault: SimulationFault;
   status: "IDLE" | "RUNNING" | "PAUSED" | "AWAITING_DECISION" | "COMPLETED" | "STOPPED";
   selected_scenario: "NORMAL" | "MULTI_EVENT" | MonitoringEventType;
   telemetry: null | {

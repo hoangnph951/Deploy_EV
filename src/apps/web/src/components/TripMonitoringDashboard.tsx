@@ -4,6 +4,7 @@ import {
   activateSimulationPlan,
   controlMonitoringSimulation,
   decideSimulation,
+  getSimulatorCapabilities,
   refreshSimulationTelemetry,
   startSimulation,
   tickSimulation,
@@ -13,12 +14,18 @@ import {
   canonicalEventBatchKey,
   ReplanningSubmissionGuard,
 } from "../lib/replanningSubmission";
-import { completeF4Confirmation, getConfirmableF4Plan, isPendingF4Plan } from "../lib/f4Confirmation";
-import { labelStage, labelStatus, labelTool } from "../lib/replanningPresentation";
+import {
+  completeF4Confirmation,
+  completeF4Rejection,
+  getConfirmableF4Plan,
+  isPendingF4Plan,
+} from "../lib/f4Confirmation";
+import { labelStatus, traceHeading } from "../lib/replanningPresentation";
 import type {
   CompositeMonitoringEventType,
   PlanProposal,
   ReplanningOutcome,
+  SimulationFault,
   SimulationScenarioSelection,
   SimulationState,
 } from "../lib/types";
@@ -73,6 +80,7 @@ export function TripMonitoringDashboard({
   const [error, setError] = useState("");
   const [f4Run, setF4Run] = useState<ReplanningOutcome | null>(null);
   const [confirmedReplacementPlanId, setConfirmedReplacementPlanId] = useState("");
+  const [rejectedReplacementPlanId, setRejectedReplacementPlanId] = useState("");
   const [failedEvents, setFailedEvents] = useState<CanonicalEvent[]>([]);
   const [rejectingPlan, setRejectingPlan] = useState(false);
   const [liveTrace, setLiveTrace] = useState<ReplanningOutcome["decision_trace"]>([]);
@@ -80,6 +88,9 @@ export function TripMonitoringDashboard({
   const [refreshingTelemetry, setRefreshingTelemetry] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenarioSelection>("NORMAL");
   const [scenarioValue, setScenarioValue] = useState(2.01);
+  const [simulationSeed, setSimulationSeed] = useState(210);
+  const [simulationFault, setSimulationFault] = useState<SimulationFault>("NONE");
+  const [faultInjectionEnabled, setFaultInjectionEnabled] = useState(false);
   const [compositeEvents, setCompositeEvents] = useState<CompositeMonitoringEventType[]>([
     "ROUTE_DEVIATION", "SOC_UNDERPERFORMANCE", "STATION_UNAVAILABLE",
   ]);
@@ -90,11 +101,26 @@ export function TripMonitoringDashboard({
     submissionGuard.current.reset();
     setF4Run(null);
     setConfirmedReplacementPlanId("");
+    setRejectedReplacementPlanId("");
     setFailedEvents([]);
     setSelectedScenario("NORMAL");
     setScenarioValue(2.01);
+    setSimulationSeed(210);
+    setSimulationFault("NONE");
     setSafetyWarning("");
   }, [tripId]);
+
+  useEffect(() => {
+    let active = true;
+    getSimulatorCapabilities()
+      .then((capabilities) => {
+        if (active) setFaultInjectionEnabled(capabilities.fault_injection_enabled);
+      })
+      .catch(() => {
+        if (active) setFaultInjectionEnabled(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (
@@ -126,6 +152,7 @@ export function TripMonitoringDashboard({
     try {
       submissionGuard.current.reset();
       setF4Run(null);
+      setRejectedReplacementPlanId("");
       setFailedEvents([]);
       setState(await startSimulation(
         tripId,
@@ -133,6 +160,8 @@ export function TripMonitoringDashboard({
         selectedScenario,
         SCENARIO_VALUE_CONFIG[selectedScenario] ? scenarioValue : undefined,
         selectedScenario === "MULTI_EVENT" ? compositeEvents : undefined,
+        simulationSeed,
+        simulationFault,
       ));
     }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Không thể bắt đầu mô phỏng."); }
@@ -181,6 +210,7 @@ export function TripMonitoringDashboard({
       });
       setF4Run(run);
       setConfirmedReplacementPlanId("");
+      setRejectedReplacementPlanId("");
       if (["INSUFFICIENT_EVIDENCE", "SEARCH_EXHAUSTED"].includes(run.status)) {
         submissionGuard.current.fail(key);
         setFailedEvents(events);
@@ -245,10 +275,10 @@ export function TripMonitoringDashboard({
         setError("Không thể từ chối phương án mới. Vui lòng thử lại.");
         return false;
       }
-      setState(null);
-      setF4Run(null);
-      setFailedEvents([]);
-      submissionGuard.current.reset();
+      if (!f4Run) return false;
+      const completed = completeF4Rejection(f4Run, replacement.plan_id);
+      setF4Run(completed.run);
+      setRejectedReplacementPlanId(completed.rejectedPlanId);
       setSafetyWarning("Bạn đã từ chối phương án mới. Nếu kế hoạch hiện tại không còn bảo đảm SOC dự phòng hoặc trạm sạc khả dụng, hãy dừng xe ở vị trí an toàn và gọi hỗ trợ.");
       return true;
     } catch (reason) {
@@ -388,6 +418,31 @@ export function TripMonitoringDashboard({
             />
           </div>
         </div> : null}
+        <label className="monitor-scenario-picker">
+          <span>Seed mô phỏng</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={simulationSeed}
+            disabled={busy}
+            onChange={(event) => setSimulationSeed(Math.max(0, Number(event.target.value) || 0))}
+          />
+          <small>Dùng lại cùng seed để phát lại đúng chuỗi dữ liệu mô phỏng.</small>
+        </label>
+        {faultInjectionEnabled ? <label className="monitor-scenario-picker">
+          <span>Kết quả F1 mô phỏng</span>
+          <select
+            value={simulationFault}
+            disabled={busy}
+            onChange={(event) => setSimulationFault(event.target.value as SimulationFault)}
+          >
+            <option value="NONE">F1 thật</option>
+            <option value="F1_PROVIDER_FAILURE">Provider F1 lỗi</option>
+            <option value="F1_PROVEN_INFEASIBLE">F1 chứng minh không khả thi</option>
+          </select>
+          <small>Chỉ áp dụng cho telemetry mô phỏng khi backend bật capability.</small>
+        </label> : null}
         <button type="button" onClick={start} disabled={busy || !planConfirmed}>▶ Bắt đầu hành trình</button>
         {!planConfirmed ? <small>Hãy xác nhận hành trình ở bước F2 trước khi mô phỏng.</small> : null}
       </>}
@@ -400,7 +455,7 @@ export function TripMonitoringDashboard({
         <div><small>{confirmedReplacementPlanId ? "Tiến độ tuyến mới" : "Tiến độ"}</small><strong>{telemetry ? `${telemetry.progress_percent.toFixed(1)}%` : "0%"}</strong></div>
       </div>
       <div className="monitor-progress"><span style={{ width: `${telemetry?.progress_percent ?? 0}%` }} /></div>
-      <p className="monitor-source">Case: <strong>{state.selected_scenario}</strong> · Nguồn: dữ liệu mô phỏng · Tăng tốc: <strong>x{state.speed_multiplier}</strong> · Thời gian dự kiến: <strong>{Math.ceil(state.estimated_duration_seconds / 60)} phút</strong></p>
+      <p className="monitor-source">Case: <strong>{state.selected_scenario}</strong> · Seed: <strong>{state.seed}</strong> · Nguồn: dữ liệu mô phỏng · Tăng tốc: <strong>x{state.speed_multiplier}</strong> · Thời gian dự kiến: <strong>{Math.ceil(state.estimated_duration_seconds / 60)} phút</strong></p>
       <div className="monitor-run-controls" aria-label="Điều khiển mô phỏng">
         {state.status === "RUNNING" ? <button type="button" disabled={busy} onClick={() => { void control("pause"); }}>Tạm dừng</button> : null}
         {state.status === "PAUSED" ? <button type="button" disabled={busy} onClick={() => { void control("resume"); }}>Tiếp tục</button> : null}
@@ -415,7 +470,7 @@ export function TripMonitoringDashboard({
         </li>)}</ol>
       </section> : null}
       {state.status === "AWAITING_DECISION" ? <div className="monitor-decisions">
-        <button type="button" onClick={() => void decide("CONTINUE")} disabled={busy}>Bỏ qua và tiếp tục</button>
+        {!state.replan_required && !rejectedReplacementPlanId ? <button type="button" onClick={() => void decide("CONTINUE")} disabled={busy}>Bỏ qua và tiếp tục</button> : null}
         <button type="button" onClick={() => void decide("STOP")} disabled={busy}>Dừng chuyến đi</button>
       </div> : null}
     </> : null}
@@ -423,7 +478,7 @@ export function TripMonitoringDashboard({
       <header><span className="f4-live-dot" /><div><small>TRỢ LÝ ĐANG PHÂN TÍCH TRỰC TIẾP</small><strong>{activeEvents.length > 1 ? `Hợp nhất ${activeEvents.length} sự kiện đồng thời` : latestEvent.event_type === "SOC_UNDERPERFORMANCE" ? "Bảo vệ mức pin dự phòng" : "Đánh giá sự kiện hành trình"}</strong></div></header>
       {liveTrace.length ? <ol>{liveTrace.map((item) => <li key={item.sequence}>
         <span>{item.sequence}</span>
-        <div><strong>{labelStage(item.stage)}</strong>{item.tool ? <small>{labelTool(item.tool)}</small> : null}<p>{item.public_summary}</p></div>
+        <div><strong className="f4-trace-heading">{traceHeading(item.stage, item.tool)}</strong><p>{item.public_summary}</p></div>
         <em>{labelStatus(item.status)}</em>
       </li>)}</ol> : <p>Đang gom telemetry, plan hiện tại, ràng buộc và bằng chứng liên quan…</p>}
     </section> : null}
@@ -435,6 +490,7 @@ export function TripMonitoringDashboard({
     run={f4Run}
     confirming={confirmingPlan}
     confirmedPlanId={confirmedReplacementPlanId}
+    rejectedPlanId={rejectedReplacementPlanId}
     onConfirmPlan={confirmReplacementPlan}
     rejecting={rejectingPlan}
     onRejectPlan={rejectReplacementPlan}

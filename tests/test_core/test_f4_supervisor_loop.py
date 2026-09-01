@@ -12,11 +12,15 @@ from tests.test_core.test_f4_replanning_service import (
 class ModelOrderedSupervisor(ConservativeSupervisor):
     def assess(self, **kwargs) -> SupervisorTurn:
         turn = super().assess(**kwargs)
+        allowed_tools = kwargs["allowed_tools"]
         return SupervisorTurn(
             assessment=turn.assessment,
             decision=ToolDecision(
                 decision="CALL_TOOL",
-                tool_name="inspect_telemetry",
+                tool_name=(
+                    "inspect_stations"
+                    if "inspect_stations" in allowed_tools else allowed_tools[0]
+                ),
                 public_summary="Kiểm tra telemetry trước.",
             ),
             action=turn.action,
@@ -60,6 +64,94 @@ class InvalidToolSupervisor(ModelOrderedSupervisor):
         )
 
 
+class RecordingAllowlistSupervisor(ConservativeSupervisor):
+    def __init__(self):
+        self.allowed_tool_history = []
+
+    def assess(self, **kwargs) -> SupervisorTurn:
+        allowed_tools = kwargs["allowed_tools"]
+        self.allowed_tool_history.append(list(allowed_tools))
+        turn = super().assess(**kwargs)
+        return SupervisorTurn(
+            assessment=turn.assessment,
+            decision=ToolDecision(
+                decision="CALL_TOOL",
+                tool_name=allowed_tools[0],
+            ),
+            action=turn.action,
+        )
+
+    def reflect(self, *, allowed_tools, **kwargs) -> ReflectionDecision:
+        self.allowed_tool_history.append(list(allowed_tools))
+        if not allowed_tools:
+            return ReflectionDecision(
+                evidence_sufficient=True,
+                hypothesis_status="SUPPORTED",
+                next_step="PROPOSE_ACTION",
+                response_source="OPENAI",
+            )
+        return ReflectionDecision(
+            evidence_sufficient=False,
+            hypothesis_status="UNCERTAIN",
+            next_step="CALL_TOOL",
+            next_tool=allowed_tools[0],
+            response_source="OPENAI",
+        )
+
+
+class OutOfOrderInitialSupervisor(RecordingAllowlistSupervisor):
+    def assess(self, **kwargs) -> SupervisorTurn:
+        turn = super().assess(**kwargs)
+        return SupervisorTurn(
+            assessment=turn.assessment,
+            decision=ToolDecision(
+                decision="CALL_TOOL",
+                tool_name="inspect_route",
+            ),
+            action=turn.action,
+        )
+
+
+class OutOfOrderReflectionSupervisor(RecordingAllowlistSupervisor):
+    def reflect(self, *, allowed_tools, observations, **kwargs) -> ReflectionDecision:
+        if observations[-1].tool == "project_current_plan":
+            self.allowed_tool_history.append(list(allowed_tools))
+            return ReflectionDecision(
+                evidence_sufficient=False,
+                hypothesis_status="UNCERTAIN",
+                next_step="CALL_TOOL",
+                next_tool="inspect_energy",
+                response_source="OPENAI",
+            )
+        return super().reflect(
+            allowed_tools=allowed_tools,
+            observations=observations,
+            **kwargs,
+        )
+
+
+class ContradictoryToolNarrativeSupervisor(RecordingAllowlistSupervisor):
+    def assess(self, **kwargs) -> SupervisorTurn:
+        turn = super().assess(**kwargs)
+        return SupervisorTurn(
+            assessment=turn.assessment,
+            decision=ToolDecision(decision="STOP", tool_name=None),
+            action=turn.action,
+        )
+
+    def reflect(self, *, allowed_tools, **kwargs) -> ReflectionDecision:
+        reflection = super().reflect(allowed_tools=allowed_tools, **kwargs)
+        if not allowed_tools:
+            return reflection
+        return reflection.model_copy(update={
+            "next_step": "STOP_INSUFFICIENT_EVIDENCE",
+            "next_tool": allowed_tools[0],
+            "public_summary": (
+                "Thiáº¿u káº¿t quáº£ tool; bÆ°á»›c tiáº¿p theo lÃ  gá»i tool Ä‘Æ°á»£c pháº§n phá»‘i."
+            ),
+        })
+
+
 def test_soc_event_collects_diagnostics_before_candidate() -> None:
     outcome = ReplanningService(planner=RecordingPlanner()).process(
         previous_context=context(),
@@ -68,7 +160,6 @@ def test_soc_event_collects_diagnostics_before_candidate() -> None:
     )
 
     assert [run.tool for run in outcome.tool_runs] == [
-        "inspect_telemetry",
         "project_current_plan",
         "inspect_energy",
         "nearest_station_reachability",
@@ -80,7 +171,7 @@ def test_soc_event_collects_diagnostics_before_candidate() -> None:
     assert all(item.public_summary for item in outcome.decision_trace)
 
 
-def test_supervisor_selects_tool_order_from_the_allowed_runtime_set() -> None:
+def test_supervisor_can_choose_event_specific_diagnostic_order() -> None:
     outcome = ReplanningService(
         planner=RecordingPlanner(), supervisor=ModelOrderedSupervisor(),
     ).process(
@@ -93,7 +184,6 @@ def test_supervisor_selects_tool_order_from_the_allowed_runtime_set() -> None:
     )
 
     assert [run.tool for run in outcome.tool_runs] == [
-        "inspect_telemetry",
         "inspect_stations",
         "project_current_plan",
         "inspect_route",
@@ -107,7 +197,134 @@ def test_supervisor_selects_tool_order_from_the_allowed_runtime_set() -> None:
     )
 
 
-def test_invalid_ai_tool_choice_fails_closed_without_local_replacement() -> None:
+def test_supervisor_receives_only_the_next_mandatory_tool() -> None:
+    supervisor = RecordingAllowlistSupervisor()
+    outcome = ReplanningService(
+        planner=RecordingPlanner(), supervisor=supervisor,
+    ).process(
+        previous_context=context(),
+        telemetry=telemetry(),
+        events=[
+            event("event-route-ordered", "ROUTE_DEVIATION"),
+            event("event-soc-ordered", "SOC_UNDERPERFORMANCE"),
+        ],
+    )
+
+    assert [run.tool for run in outcome.tool_runs] == [
+        "project_current_plan",
+        "inspect_route",
+        "inspect_energy",
+        "nearest_station_reachability",
+        "build_full_replan",
+        "compare_plans",
+    ]
+    assert supervisor.allowed_tool_history == [
+        [
+            "project_current_plan", "inspect_route", "inspect_energy",
+            "nearest_station_reachability",
+        ],
+        ["inspect_route", "inspect_energy", "nearest_station_reachability"],
+        ["inspect_energy", "nearest_station_reachability"],
+        ["nearest_station_reachability"],
+        [],
+        ["build_full_replan"],
+        ["compare_plans"],
+        [],
+    ]
+
+
+def test_simulated_telemetry_is_input_not_an_ai_selected_tool() -> None:
+    supervisor = RecordingAllowlistSupervisor()
+
+    outcome = ReplanningService(
+        planner=RecordingPlanner(), supervisor=supervisor,
+    ).process(
+        previous_context=context(),
+        telemetry=telemetry(),
+        events=[
+            event("event-auto-route", "ROUTE_DEVIATION"),
+            event("event-auto-soc", "SOC_UNDERPERFORMANCE"),
+            event("event-auto-station", "STATION_UNAVAILABLE", ["ST-10"]),
+        ],
+    )
+
+    assert outcome.status == "SUCCEEDED"
+    assert "inspect_telemetry" not in [run.tool for run in outcome.tool_runs]
+    assert supervisor.allowed_tool_history[0] == [
+        "project_current_plan", "inspect_route", "inspect_energy",
+        "nearest_station_reachability", "inspect_stations",
+    ]
+    assert "telemetry:telemetry-5" in {
+        ref for run in outcome.tool_runs for ref in run.provenance_refs
+    }
+
+
+def test_contradictory_ai_tool_decisions_cannot_block_deterministic_f1_flow() -> None:
+    outcome = ReplanningService(
+        planner=RecordingPlanner(), supervisor=ContradictoryToolNarrativeSupervisor(),
+    ).process(
+        previous_context=context(),
+        telemetry=telemetry(),
+        events=[
+            event("event-deterministic-route", "ROUTE_DEVIATION"),
+            event("event-deterministic-soc", "SOC_UNDERPERFORMANCE"),
+            event(
+                "event-deterministic-station",
+                "STATION_UNAVAILABLE",
+                ["ST-10"],
+            ),
+        ],
+    )
+
+    assert outcome.status == "SUCCEEDED"
+    assert [run.tool for run in outcome.tool_runs] == [
+        "project_current_plan",
+        "inspect_route",
+        "inspect_energy",
+        "nearest_station_reachability",
+        "inspect_stations",
+        "build_minimal_substitution",
+        "compare_plans",
+    ]
+    assert outcome.candidate is not None
+    assert outcome.action.action == "PROPOSE_REPLAN"
+
+
+def test_out_of_order_ai_assessment_does_not_override_deterministic_order() -> None:
+    planner = RecordingPlanner()
+    outcome = ReplanningService(
+        planner=planner, supervisor=OutOfOrderInitialSupervisor(),
+    ).process(
+        previous_context=context(), telemetry=telemetry(),
+        events=[event("event-route-initial-order", "ROUTE_DEVIATION")],
+    )
+
+    assert outcome.status == "SUCCEEDED"
+    assert [run.tool for run in outcome.tool_runs] == [
+        "inspect_route", "project_current_plan",
+        "build_full_replan", "compare_plans",
+    ]
+    assert len(planner.calls) == 1
+
+
+def test_out_of_order_ai_reflection_does_not_override_deterministic_order() -> None:
+    planner = RecordingPlanner()
+    outcome = ReplanningService(
+        planner=planner, supervisor=OutOfOrderReflectionSupervisor(),
+    ).process(
+        previous_context=context(), telemetry=telemetry(),
+        events=[event("event-route-reflection-order", "ROUTE_DEVIATION")],
+    )
+
+    assert outcome.status == "SUCCEEDED"
+    assert [run.tool for run in outcome.tool_runs] == [
+        "project_current_plan", "inspect_route",
+        "build_full_replan", "compare_plans",
+    ]
+    assert len(planner.calls) == 1
+
+
+def test_unknown_ai_tool_choice_does_not_block_deterministic_f1_flow() -> None:
     planner = RecordingPlanner()
     outcome = ReplanningService(
         planner=planner, supervisor=InvalidToolSupervisor(),
@@ -116,10 +333,13 @@ def test_invalid_ai_tool_choice_fails_closed_without_local_replacement() -> None
         events=[event("event-invalid-tool", "ROUTE_DEVIATION")],
     )
 
-    assert outcome.status == "INSUFFICIENT_EVIDENCE"
-    assert outcome.action.action == "STOP_INSUFFICIENT_EVIDENCE"
-    assert outcome.reflection.reason_codes == ["AI_TOOL_SELECTION_INVALID"]
-    assert planner.calls == []
+    assert outcome.status == "SUCCEEDED"
+    assert outcome.action.action == "PROPOSE_REPLAN"
+    assert [run.tool for run in outcome.tool_runs] == [
+        "project_current_plan", "inspect_route",
+        "build_full_replan", "compare_plans",
+    ]
+    assert len(planner.calls) == 1
 
 
 def test_decision_trace_callback_emits_each_public_step_in_order() -> None:
@@ -149,7 +369,6 @@ def test_coalesced_events_use_union_of_diagnostics_and_keep_blacklist() -> None:
     )
 
     assert [run.tool for run in outcome.tool_runs] == [
-        "inspect_telemetry",
         "project_current_plan",
         "inspect_route",
         "inspect_stations",
@@ -163,7 +382,7 @@ def test_coalesced_events_use_union_of_diagnostics_and_keep_blacklist() -> None:
     assert "station:ST-10:excluded" in station_step.evidence_refs
 
 
-def test_stale_telemetry_records_check_and_stops_before_f1() -> None:
+def test_stale_simulated_telemetry_stops_before_agent_tools() -> None:
     planner = RecordingPlanner()
     outcome = ReplanningService(planner=planner).process(
         previous_context=context(),
@@ -171,7 +390,7 @@ def test_stale_telemetry_records_check_and_stops_before_f1() -> None:
         events=[event("event-stale-loop", "STALE_TELEMETRY")],
     )
 
-    assert [run.tool for run in outcome.tool_runs] == ["inspect_telemetry"]
+    assert outcome.tool_runs == []
     assert planner.calls == []
     assert outcome.decision_trace[-1].status == "BLOCKED"
 

@@ -1,0 +1,139 @@
+{
+  "workloads": [
+    {
+      "workload": "F3_TICK",
+      "concurrency": 1,
+      "sample_count": 200,
+      "p50_ms": 1.32695,
+      "p95_ms": 2.0782749999999997,
+      "p99_ms": 2.509847999999999,
+      "throughput_rps": 681.1218894866113,
+      "error_count": 200,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 2.0782749999999997,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT"
+      ]
+    },
+    {
+      "workload": "F3_TICK",
+      "concurrency": 5,
+      "sample_count": 200,
+      "p50_ms": 3.38875,
+      "p95_ms": 5.2895049999999975,
+      "p99_ms": 10.684826999999745,
+      "throughput_rps": 1219.4787338152307,
+      "error_count": 200,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 2.0782749999999997,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    },
+    {
+      "workload": "F3_TICK",
+      "concurrency": 10,
+      "sample_count": 200,
+      "p50_ms": 6.21,
+      "p95_ms": 44.55486999999988,
+      "p99_ms": 86.10148199999996,
+      "throughput_rps": 841.6314689372763,
+      "error_count": 200,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 2.0782749999999997,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    },
+    {
+      "workload": "F3_TICK",
+      "concurrency": 20,
+      "sample_count": 200,
+      "p50_ms": 18.7561,
+      "p95_ms": 73.94713999999999,
+      "p99_ms": 103.80294099999985,
+      "throughput_rps": 695.4702630824912,
+      "error_count": 200,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 2.0782749999999997,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    },
+    {
+      "workload": "F4_DETERMINISTIC",
+      "concurrency": 1,
+      "sample_count": 40,
+      "p50_ms": 4.4186499999999995,
+      "p95_ms": 5.625479999999999,
+      "p99_ms": 6.298959,
+      "throughput_rps": 224.35534296640392,
+      "error_count": 40,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 5.625479999999999,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT"
+      ]
+    },
+    {
+      "workload": "F4_DETERMINISTIC",
+      "concurrency": 5,
+      "sample_count": 40,
+      "p50_ms": 14.3163,
+      "p95_ms": 31.523825,
+      "p99_ms": 32.572096,
+      "throughput_rps": 285.51768639308364,
+      "error_count": 40,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 5.625479999999999,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    },
+    {
+      "workload": "F4_DETERMINISTIC",
+      "concurrency": 10,
+      "sample_count": 40,
+      "p50_ms": 33.9467,
+      "p95_ms": 48.038025,
+      "p99_ms": 51.058823999999994,
+      "throughput_rps": 274.23744849477924,
+      "error_count": 40,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 5.625479999999999,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    },
+    {
+      "workload": "F4_DETERMINISTIC",
+      "concurrency": 20,
+      "sample_count": 40,
+      "p50_ms": 43.393,
+      "p95_ms": 65.59028,
+      "p99_ms": 67.27865800000001,
+      "throughput_rps": 374.2108828008936,
+      "error_count": 40,
+      "error_rate": 1.0,
+      "baseline_p95_ms": 5.625479999999999,
+      "saturation_reasons": [
+        "ERROR_RATE_GT_1_PERCENT",
+        "P95_GT_2X_CCU1"
+      ]
+    }
+  ],
+  "first_saturation_ccu": {
+    "F3_TICK": 1,
+    "F4_DETERMINISTIC": 1
+  },
+  "limitations": [
+    "CPU/RSS sampling was not requested for this matrix.",
+    "Token and cost fields remain null when the provider does not return them."
+  ],
+  "pricing_snapshot": null
+}

@@ -110,6 +110,17 @@ def test_missing_confirmed_plan_never_claims_station_is_unaffected() -> None:
     assert projection["station_unavailable_affects_remaining_trip"] is None
 
 
+def test_projector_station_impact_is_not_applicable_without_exclusions() -> None:
+    planner = TripServiceCandidatePlanner(FakeTripService(confirmed_plan()), "owner")
+
+    projection = planner.project_remaining_plan(
+        trip_id="trip-1", base_plan_version=3, traveled_distance_km=30.0,
+        excluded_station_ids=[],
+    )
+
+    assert projection["station_unavailable_affects_remaining_trip"] is None
+
+
 def test_minimal_substitution_preserves_unaffected_station_order() -> None:
     plan_that_drops_existing_stop = {
         "version": 4,

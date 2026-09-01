@@ -174,7 +174,9 @@ class ReplanningService:
                 context_result.snapshot.unresolved_constraints.telemetry_blocked
                 or "TELEMETRY_BLOCKED" in loop.blocked_reason_codes
             )
-            action = turn.action if telemetry_blocked else None
+            # A blocked safety precondition is authoritative. Do not expose an
+            # action drafted by the model from stale telemetry.
+            action = None
             if action is None:
                 action = ActionProposalDraft(
                     action=(

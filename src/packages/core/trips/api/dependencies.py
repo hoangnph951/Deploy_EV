@@ -3,7 +3,11 @@ from functools import lru_cache
 from src.apps.api.bootstrap.config import get_settings
 from src.packages.agent.integrations.llm import OpenAISafePlanRanker
 from src.packages.agent.planning.graph import build_planning_orchestrator
-from src.packages.agent.planning.runtime import PlanningRuntime, get_legacy_runtime
+from src.packages.agent.planning.runtime import (
+    PlanningRuntime,
+    get_legacy_runtime,
+    set_legacy_runtime,
+)
 from src.packages.core.planning.application.ports import DeterministicPlanRanker
 from src.packages.core.policies.application.assumptions import AssumptionSnapshotService
 from src.packages.core.policies.application.service import PolicyConfigService
@@ -21,6 +25,9 @@ from src.packages.core.trips.infrastructure.geocoding import (
     InMemoryGeocoder,
 )
 from src.packages.core.trips.infrastructure.goong_places import GoongPlacesClient
+from src.packages.core.trips.infrastructure.local_station_catalog_service import (
+    LocalStationCatalogService,
+)
 from src.packages.core.trips.infrastructure.openai_recovery import (
     NullRecoveryAdvisor,
     OpenAIRecoveryAdvisor,
@@ -33,6 +40,12 @@ from src.packages.core.trips.infrastructure.routing import (
     InMemoryRoutingProvider,
 )
 from src.packages.core.trips.infrastructure.sqlalchemy_repository import SqlAlchemyTripRepository
+from src.packages.core.trips.infrastructure.station_catalog_repository import (
+    SqlAlchemyStationCatalogRepository,
+)
+from src.packages.core.trips.infrastructure.station_graph_repository import (
+    SqlAlchemyStationEdgeRepository,
+)
 from src.packages.core.trips.infrastructure.station_service import (
     FallbackStationDataService,
     FixtureStationDataService,
@@ -66,10 +79,63 @@ def get_goong_places_client() -> GoongPlacesClient:
     )
 
 
+def _build_station_service(settings, station_repository, geocoder):
+    if settings.station_provider == "fixture":
+        station_service = FixtureStationDataService()
+    elif settings.station_catalog_db_enabled:
+        station_service = LocalStationCatalogService(
+            repository=station_repository,
+            dataset_max_stale_seconds=settings.station_dataset_max_stale_seconds,
+            detail_max_stale_seconds=settings.station_detail_max_stale_seconds,
+        )
+        # The persisted catalog is an optimization, not the sole source of
+        # truth. If it is stale or not hydrated, query the live official
+        # locator before falling back to web search.
+        station_service = FallbackStationDataService(
+            primary=station_service,
+            fallback=VinFastStationDataService(
+                meta_url=settings.vinfast_locator_meta_url,
+                dataset_base_url=settings.vinfast_locator_dataset_base_url,
+                detail_base_url=settings.vinfast_locator_detail_base_url,
+                timeout_seconds=settings.vinfast_timeout_seconds,
+            ),
+        )
+    else:
+        # Keep a live official provider available even when the persisted
+        # catalog rollout is disabled or empty. Planning must not depend on a
+        # database hydration job to discover the route's charging stations.
+        station_service = VinFastStationDataService(
+            meta_url=settings.vinfast_locator_meta_url,
+            dataset_base_url=settings.vinfast_locator_dataset_base_url,
+            detail_base_url=settings.vinfast_locator_detail_base_url,
+            timeout_seconds=settings.vinfast_timeout_seconds,
+        )
+    if settings.openai_station_fallback_enabled and settings.openai_api_key:
+        station_service = FallbackStationDataService(
+            primary=station_service,
+            fallback=OpenAIWebStationDataService(
+                api_key=settings.openai_api_key,
+                base_url=settings.openai_base_url,
+                model=settings.openai_station_search_model,
+                geocoder=geocoder,
+                timeout_seconds=settings.openai_station_search_timeout_seconds,
+                allowed_domains=tuple(
+                    domain.strip()
+                    for domain in settings.openai_station_search_allowed_domains.split(",")
+                    if domain.strip()
+                ),
+                max_candidates=settings.openai_station_search_max_candidates,
+                evidence_repository=station_repository,
+            ),
+        )
+    return station_service
+
+
 @lru_cache
 def get_trip_service() -> TripService:
     settings = get_settings()
     repository = SqlAlchemyTripRepository(settings.database_url)
+    station_repository = SqlAlchemyStationCatalogRepository(settings.database_url)
     policy_repository = SqlAlchemyPolicyConfigRepository(settings.database_url)
     # Runtime databases are managed exclusively by Alembic. Calling
     # create_all() against a shared database can create tables without moving
@@ -94,32 +160,7 @@ def get_trip_service() -> TripService:
             min_request_interval_seconds=settings.goong_min_request_interval_seconds,
             rate_limit_cooldown_seconds=settings.goong_rate_limit_cooldown_seconds,
         )
-        station_service = (
-            FixtureStationDataService()
-            if settings.station_provider == "fixture"
-            else VinFastStationDataService(
-                meta_url=settings.vinfast_locator_meta_url,
-                dataset_base_url=settings.vinfast_locator_dataset_base_url,
-                detail_base_url=settings.vinfast_locator_detail_base_url,
-                timeout_seconds=settings.vinfast_timeout_seconds,
-            )
-        )
-        if settings.openai_station_fallback_enabled and settings.openai_api_key:
-            station_service = FallbackStationDataService(
-                primary=station_service,
-                fallback=OpenAIWebStationDataService(
-                    api_key=settings.openai_api_key,
-                    model=settings.openai_station_search_model,
-                    geocoder=geocoder,
-                    timeout_seconds=settings.openai_station_search_timeout_seconds,
-                    allowed_domains=tuple(
-                        domain.strip()
-                        for domain in settings.openai_station_search_allowed_domains.split(",")
-                        if domain.strip()
-                    ),
-                    max_candidates=settings.openai_station_search_max_candidates,
-                ),
-            )
+        station_service = _build_station_service(settings, station_repository, geocoder)
         environment_provider = (
             StaticEnvironmentProvider()
             if settings.environment_provider == "fixture"
@@ -147,13 +188,29 @@ def get_trip_service() -> TripService:
                 if settings.app_env != "test"
                 else DeterministicPlanRanker()
             ),
+            station_edge_repository=SqlAlchemyStationEdgeRepository(
+                settings.database_url,
+                max_age_seconds=settings.station_graph_edge_max_age_seconds,
+                max_outgoing_neighbors=settings.station_graph_max_neighbors,
+            ),
+            station_graph_enabled=settings.station_graph_enabled,
+            station_graph_routing_provider=(
+                "OSRM" if settings.station_graph_routing_provider == "osrm" else "GOONG_DIRECTIONS"
+            ),
+            station_graph_routing_profile=(
+                settings.osrm_profile if settings.station_graph_routing_provider == "osrm" else "car"
+            ),
+            station_graph_road_version=settings.station_graph_road_version,
+            station_graph_edge_max_age_seconds=settings.station_graph_edge_max_age_seconds,
         )
     )
+    set_legacy_runtime(planning_runtime)
     routing_provider = planning_runtime.routing_provider
     recovery_advisor = NullRecoveryAdvisor()
     if settings.openai_recovery_enabled and settings.openai_api_key:
         recovery_advisor = OpenAIRecoveryAdvisor(
             api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
             model=settings.openai_recovery_model,
             timeout_seconds=settings.openai_recovery_timeout_seconds,
         )

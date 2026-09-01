@@ -259,7 +259,8 @@ class TripService:
                     ),
                     failure_category="STATION_DATA",
                     provider="STATION_PROVIDER_CHAIN",
-                    provider_status="UNAVAILABLE",
+                    provider_status=exc.code,
+                    http_status=exc.http_status,
                     recovery_options=[
                         RecoveryOption(
                             code="RETRY_STATION_DISCOVERY",
@@ -353,7 +354,9 @@ class TripService:
                     ],
                     created_at=datetime.now(UTC),
                 )
-            if state.get("station_provider_unavailable"):
+            if state.get("station_provider_unavailable") or state.get(
+                "recovery_provider_unavailable"
+            ):
                 from src.packages.contracts.trips import ActionRequiredResponse, RecoveryOption
 
                 return ActionRequiredResponse(

@@ -1,0 +1,3065 @@
+[
+  {
+    "case_id": "P210-F3-EDGE-002",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0076,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "P210-F3-EDGE-003",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0088,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "P210-F3-HAPPY-004",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STATION_UNAVAILABLE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0114,
+    "raw_contract": {
+      "classification": "STATION_UNAVAILABLE",
+      "events": [
+        "STATION_UNAVAILABLE"
+      ]
+    }
+  },
+  {
+    "case_id": "P210-F3-EDGE-005",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "status": "RUNNING",
+      "tick_count": 4,
+      "event_count": 1,
+      "seed": 210,
+      "candidate_mutated": false
+    },
+    "selected_tools": [
+      "refresh_telemetry"
+    ],
+    "outcome": "REFRESHED",
+    "action": "REFRESH_TELEMETRY",
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 132.1603,
+    "raw_contract": {
+      "start_status": 200,
+      "final_status": "RUNNING",
+      "events": [
+        {
+          "event_type": "STALE_TELEMETRY",
+          "status": "RESOLVED"
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "P210-F3-EDGE-006",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "status": "RUNNING",
+      "tick_count": 0,
+      "event_count": 0,
+      "seed": 210,
+      "candidate_mutated": false
+    },
+    "selected_tools": [],
+    "outcome": "RESET",
+    "action": "RESET_SIMULATION",
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 109.3218,
+    "raw_contract": {
+      "start_status": 200,
+      "final_status": "RUNNING",
+      "events": []
+    }
+  },
+  {
+    "case_id": "P210-F4-HAPPY-001",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 117.7423,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "P210-F4-HAPPY-002",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": [
+        "ST-10"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "CONTINUE_CURRENT_PLAN",
+    "lifecycle": "ACTIVE_CURRENT_PLAN",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Tr\u1ea1m kh\u00f4ng kh\u1ea3 d\u1ee5ng kh\u00f4ng c\u00f2n \u1ea3nh h\u01b0\u1edfng ph\u1ea7n h\u00e0nh tr\u00ecnh ph\u00eda tr\u01b0\u1edbc; ti\u1ebfp t\u1ee5c k\u1ebf ho\u1ea1ch hi\u1ec7n t\u1ea1i.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 194.1344,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "CONTINUE_CURRENT_PLAN",
+        "reason_codes": [
+          "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        }
+      ],
+      "candidate_present": false,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "P210-F4-EDGE-003",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION",
+      "SOC_UNDERPERFORMANCE",
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": [
+        "ST-10"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 114.6384,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 3,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 6,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 7,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "P210-F4-UNHAPPY-005",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 94.167,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "P210-F4-HAPPY-006",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 112.9479,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "P210-F4-EDGE-007",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 113.8803,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "P210-F4-SEC-008",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [],
+    "constraints": {
+      "http_statuses": [
+        403,
+        403,
+        403,
+        403
+      ],
+      "candidate_mutated": false,
+      "owner_plan_status": "PENDING"
+    },
+    "selected_tools": [],
+    "outcome": "FORBIDDEN",
+    "action": "DENY_MUTATION",
+    "lifecycle": "PENDING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 82.7813,
+    "raw_contract": {
+      "http_statuses": [
+        403,
+        403,
+        403,
+        403
+      ],
+      "owner_plan_status": "PENDING"
+    }
+  },
+  {
+    "case_id": "P210-F4-AI-009",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "ROUTE_DEVIATION",
+      "SOC_UNDERPERFORMANCE",
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": [
+        "ST-22"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 114.3959,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 3,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 6,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 7,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "P210-F4-AI-904",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [
+      "SOC_UNDERPERFORMANCE",
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": [
+        "ST-DN-04"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 192.3223,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 2,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 6,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "P210-F4-AI-905",
+    "cohort": "MENTOR_REMEDIATION",
+    "events": [],
+    "constraints": {
+      "confirmed_plan_version_after": 1,
+      "rejected_plan_version": 2,
+      "active_plan_mutated": false
+    },
+    "selected_tools": [],
+    "outcome": "REJECTED",
+    "action": "REJECT_CANDIDATE",
+    "lifecycle": "ACTIVE",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 147.0405,
+    "raw_contract": {
+      "reject_http_status": 200,
+      "active_status": "CONFIRMED",
+      "rejected_status": "REJECTED"
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-BELOW",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0096,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-EQUAL",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0095,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0123,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-SOC-BELOW",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0127,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-SOC-EQUAL",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0089,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-SOC-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0091,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STALE-BELOW",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0145,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STALE-EQUAL",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0092,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STALE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STALE_TELEMETRY",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.012,
+    "raw_contract": {
+      "classification": "STALE_TELEMETRY",
+      "events": [
+        "STALE_TELEMETRY"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ALL-EQUAL",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0115,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ALL-BELOW",
+    "cohort": "BOUNDARY",
+    "events": [],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "NORMAL",
+    "action": null,
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0075,
+    "raw_contract": {
+      "classification": "NORMAL",
+      "events": []
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-SOC-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.01,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-STALE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0075,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-SOC-STALE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0099,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ALL-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0073,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-EQUAL-SOC-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0098,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-SOC-EQUAL-STALE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STALE_TELEMETRY",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.012,
+    "raw_contract": {
+      "classification": "STALE_TELEMETRY",
+      "events": [
+        "STALE_TELEMETRY"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-ROUTE-BELOW-SOC-EQUAL-STALE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STALE_TELEMETRY",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0082,
+    "raw_contract": {
+      "classification": "STALE_TELEMETRY",
+      "events": [
+        "STALE_TELEMETRY"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STATION-ROUTE-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STATION_UNAVAILABLE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0073,
+    "raw_contract": {
+      "classification": "STATION_UNAVAILABLE",
+      "events": [
+        "STATION_UNAVAILABLE"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STATION-SOC-ABOVE",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STATION_UNAVAILABLE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0062,
+    "raw_contract": {
+      "classification": "STATION_UNAVAILABLE",
+      "events": [
+        "STATION_UNAVAILABLE"
+      ]
+    }
+  },
+  {
+    "case_id": "BOUNDARY-STATION-ALL-EQUAL",
+    "cohort": "BOUNDARY",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STATION_UNAVAILABLE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0064,
+    "raw_contract": {
+      "classification": "STATION_UNAVAILABLE",
+      "events": [
+        "STATION_UNAVAILABLE"
+      ]
+    }
+  },
+  {
+    "case_id": "FAILURE-PROVIDER-001",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 114.1386,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "FAILURE-INFEASIBLE-002",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INFEASIBLE",
+    "action": "NO_FEASIBLE_PLAN_REQUEST_ASSISTANCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Kh\u00f4ng t\u00ecm th\u1ea5y ph\u01b0\u01a1ng \u00e1n \u0111\u00e3 \u0111\u01b0\u1ee3c ch\u1ee9ng minh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 115.8332,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INFEASIBLE",
+      "action": {
+        "action": "NO_FEASIBLE_PLAN_REQUEST_ASSISTANCE",
+        "reason_codes": [
+          "DETERMINISTIC_INFEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "FAILURE-STALE-REFRESH-003",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "status": "RUNNING",
+      "tick_count": 4,
+      "event_count": 1,
+      "seed": 210,
+      "candidate_mutated": false
+    },
+    "selected_tools": [
+      "refresh_telemetry"
+    ],
+    "outcome": "REFRESHED",
+    "action": "REFRESH_TELEMETRY",
+    "lifecycle": "RUNNING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 103.9358,
+    "raw_contract": {
+      "start_status": 200,
+      "final_status": "RUNNING",
+      "events": [
+        {
+          "event_type": "STALE_TELEMETRY",
+          "status": "RESOLVED"
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "FAILURE-STALE-CANDIDATE-004",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 132.5917,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "FAILURE-TWO-TAB-005",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [],
+    "constraints": {
+      "http_statuses": [
+        200,
+        409
+      ],
+      "success_count": 1,
+      "conflict_count": 1
+    },
+    "selected_tools": [],
+    "outcome": "VERSION_CONFLICT",
+    "action": "CONFIRM_ONCE",
+    "lifecycle": "CONFIRMED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 96.3039,
+    "raw_contract": {
+      "http_statuses": [
+        200,
+        409
+      ]
+    }
+  },
+  {
+    "case_id": "FAILURE-DUPLICATE-EVENT-006",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "epoch_event_count": 1,
+      "duplicate_event_count": 1
+    },
+    "selected_tools": [],
+    "outcome": "DEDUPLICATED",
+    "action": "COALESCE_EVENT",
+    "lifecycle": "COORDINATED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.104,
+    "raw_contract": {
+      "epoch_event_count": 1,
+      "duplicate_event_count": 1
+    }
+  },
+  {
+    "case_id": "FAILURE-IDEMPOTENT-007",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "REQUEST_NEW_TELEMETRY",
+    "lifecycle": "AWAITING_TELEMETRY",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "C\u1ea7n telemetry GPS v\u00e0 SOC m\u1edbi tr\u01b0\u1edbc khi ti\u1ebfp t\u1ee5c.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 112.119,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "REQUEST_NEW_TELEMETRY",
+        "reason_codes": [
+          "TELEMETRY_BLOCKED"
+        ],
+        "limitations": [
+          "Kh\u00f4ng t\u1ef1 ch\u1ecdn thay c\u00f4ng c\u1ee5 khi quy\u1ebft \u0111\u1ecbnh AI kh\u00f4ng h\u1ee3p l\u1ec7."
+        ],
+        "requires_owner_confirmation": false,
+        "response_source": "DETERMINISTIC"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [],
+      "candidate_present": false,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "FAILURE-REJECT-UNSAFE-008",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 110.9081,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "FAILURE-CROSS-USER-GENERIC-009",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [],
+    "constraints": {
+      "http_statuses": [
+        403,
+        403
+      ],
+      "candidate_mutated": false,
+      "owner_plan_status": "PENDING"
+    },
+    "selected_tools": [],
+    "outcome": "FORBIDDEN",
+    "action": "DENY_MUTATION",
+    "lifecycle": "PENDING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 93.962,
+    "raw_contract": {
+      "http_statuses": [
+        403,
+        403
+      ],
+      "owner_plan_status": "PENDING"
+    }
+  },
+  {
+    "case_id": "FAILURE-CROSS-USER-F4-010",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [],
+    "constraints": {
+      "http_statuses": [
+        403,
+        403
+      ],
+      "candidate_mutated": false,
+      "owner_plan_status": "PENDING"
+    },
+    "selected_tools": [],
+    "outcome": "FORBIDDEN",
+    "action": "DENY_MUTATION",
+    "lifecycle": "PENDING",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 70.2928,
+    "raw_contract": {
+      "http_statuses": [
+        403,
+        403
+      ],
+      "owner_plan_status": "PENDING"
+    }
+  },
+  {
+    "case_id": "FAILURE-SEARCH-EXHAUSTED-011",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 109.0962,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "FAILURE-STALE-GUARD-012",
+    "cohort": "FAILURE_LIFECYCLE",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "REQUEST_NEW_TELEMETRY",
+    "lifecycle": "AWAITING_TELEMETRY",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "C\u1ea7n telemetry GPS v\u00e0 SOC m\u1edbi tr\u01b0\u1edbc khi ti\u1ebfp t\u1ee5c.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 88.8366,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "REQUEST_NEW_TELEMETRY",
+        "reason_codes": [
+          "TELEMETRY_BLOCKED"
+        ],
+        "limitations": [
+          "Kh\u00f4ng t\u1ef1 ch\u1ecdn thay c\u00f4ng c\u1ee5 khi quy\u1ebft \u0111\u1ecbnh AI kh\u00f4ng h\u1ee3p l\u1ec7."
+        ],
+        "requires_owner_confirmation": false,
+        "response_source": "DETERMINISTIC"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [],
+      "candidate_present": false,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-ROUTE-001",
+    "cohort": "HOLDOUT",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0069,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-SOC-002",
+    "cohort": "HOLDOUT",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.007,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-STALE-003",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STALE_TELEMETRY"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STALE_TELEMETRY",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.007,
+    "raw_contract": {
+      "classification": "STALE_TELEMETRY",
+      "events": [
+        "STALE_TELEMETRY"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-STATION-004",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "STATION_UNAVAILABLE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0064,
+    "raw_contract": {
+      "classification": "STATION_UNAVAILABLE",
+      "events": [
+        "STATION_UNAVAILABLE"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-ROUTE-005",
+    "cohort": "HOLDOUT",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "ROUTE_DEVIATION",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0065,
+    "raw_contract": {
+      "classification": "ROUTE_DEVIATION",
+      "events": [
+        "ROUTE_DEVIATION"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F3-SOC-006",
+    "cohort": "HOLDOUT",
+    "events": [
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "strict_thresholds": true
+    },
+    "selected_tools": [],
+    "outcome": "SOC_UNDERPERFORMANCE",
+    "action": "EMIT_EVENT",
+    "lifecycle": "AWAITING_DECISION",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": null,
+    "supervisor_mode": "DETERMINISTIC_ORACLE",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 0.0077,
+    "raw_contract": {
+      "classification": "SOC_UNDERPERFORMANCE",
+      "events": [
+        "SOC_UNDERPERFORMANCE"
+      ]
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-STATION-BEHIND-007",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": [
+        "ST-HUE-17"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "CONTINUE_CURRENT_PLAN",
+    "lifecycle": "ACTIVE_CURRENT_PLAN",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Tr\u1ea1m kh\u00f4ng kh\u1ea3 d\u1ee5ng kh\u00f4ng c\u00f2n \u1ea3nh h\u01b0\u1edfng ph\u1ea7n h\u00e0nh tr\u00ecnh ph\u00eda tr\u01b0\u1edbc; ti\u1ebfp t\u1ee5c k\u1ebf ho\u1ea1ch hi\u1ec7n t\u1ea1i.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 110.1962,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "CONTINUE_CURRENT_PLAN",
+        "reason_codes": [
+          "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        }
+      ],
+      "candidate_present": false,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-STATION-SOC-008",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STATION_UNAVAILABLE",
+      "SOC_UNDERPERFORMANCE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": [
+        "ST-NT-08"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_energy",
+      "nearest_station_reachability",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 97.9442,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 2,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_energy",
+          "status": "SUCCEEDED",
+          "provider": "F1_ENERGY_MODEL",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ENERGY_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "nearest_station_reachability",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_REACHABILITY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "NEAREST_STATION_REACHABILITY_SCOPE_READY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 6,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-STALE-ROUTE-009",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STALE_TELEMETRY",
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "REQUEST_NEW_TELEMETRY",
+    "lifecycle": "AWAITING_TELEMETRY",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "C\u1ea7n telemetry GPS v\u00e0 SOC m\u1edbi tr\u01b0\u1edbc khi ti\u1ebfp t\u1ee5c.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 223.4223,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "REQUEST_NEW_TELEMETRY",
+        "reason_codes": [
+          "TELEMETRY_BLOCKED"
+        ],
+        "limitations": [
+          "Kh\u00f4ng t\u1ef1 ch\u1ecdn thay c\u00f4ng c\u1ee5 khi quy\u1ebft \u0111\u1ecbnh AI kh\u00f4ng h\u1ee3p l\u1ec7."
+        ],
+        "requires_owner_confirmation": false,
+        "response_source": "DETERMINISTIC"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 2,
+        "status": "SEALED"
+      },
+      "tool_runs": [],
+      "candidate_present": false,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-ROUTE-STATION-010",
+    "cohort": "HOLDOUT",
+    "events": [
+      "ROUTE_DEVIATION",
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": [
+        "ST-HCM-44"
+      ]
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 97.9138,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 2,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "UNAVAILABLE_STATION_NOT_IN_REMAINING_TRIP"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 5,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-CURRENT-POSITION-011",
+    "cohort": "HOLDOUT",
+    "events": [
+      "STATION_UNAVAILABLE"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": 2,
+      "owner_confirmation_required": true,
+      "candidate_mutated": true,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_stations",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "SUCCEEDED",
+    "action": "PROPOSE_REPLAN",
+    "lifecycle": "PENDING",
+    "candidate_count": 1,
+    "safety_violations": [],
+    "narrative": "C\u00f3 ph\u01b0\u01a1ng \u00e1n m\u1edbi c\u1ea7n b\u1ea1n xem x\u00e9t v\u00e0 x\u00e1c nh\u1eadn.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 101.3956,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "SUCCEEDED",
+      "action": {
+        "action": "PROPOSE_REPLAN",
+        "reason_codes": [
+          "CANDIDATE_FEASIBLE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": true,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": 2
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_stations",
+          "status": "SUCCEEDED",
+          "provider": "F1_STATION_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "STATION_EXCLUSIONS_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 1
+    }
+  },
+  {
+    "case_id": "HOLDOUT-F4-ACTION-GUARD-012",
+    "cohort": "HOLDOUT",
+    "events": [
+      "ROUTE_DEVIATION"
+    ],
+    "constraints": {
+      "context_version": 2,
+      "pending_plan_version": null,
+      "owner_confirmation_required": false,
+      "candidate_mutated": false,
+      "excluded_station_ids": []
+    },
+    "selected_tools": [
+      "project_current_plan",
+      "inspect_route",
+      "build_full_replan",
+      "compare_plans"
+    ],
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "action": "STOP_INSUFFICIENT_EVIDENCE",
+    "lifecycle": "STOPPED",
+    "candidate_count": 0,
+    "safety_violations": [],
+    "narrative": "Ch\u01b0a \u0111\u1ee7 b\u1eb1ng ch\u1ee9ng \u0111\u1ec3 \u0111\u1ec1 xu\u1ea5t m\u1ed9t h\u00e0nh tr\u00ecnh an to\u00e0n.",
+    "supervisor_mode": "SAFE_FALLBACK",
+    "model": null,
+    "prompt_version": null,
+    "latency_ms": 95.6072,
+    "raw_contract": {
+      "http_status": 202,
+      "status": "INSUFFICIENT_EVIDENCE",
+      "action": {
+        "action": "STOP_INSUFFICIENT_EVIDENCE",
+        "reason_codes": [
+          "INSUFFICIENT_EVIDENCE"
+        ],
+        "limitations": [],
+        "requires_owner_confirmation": false,
+        "response_source": "SAFE_FALLBACK"
+      },
+      "context": {
+        "context_version": 2,
+        "pending_plan_version": null
+      },
+      "epoch": {
+        "event_count": 1,
+        "status": "SEALED"
+      },
+      "tool_runs": [
+        {
+          "sequence": 1,
+          "tool": "project_current_plan",
+          "status": "SUCCEEDED",
+          "provider": "F2_PLAN_HISTORY",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "CURRENT_PLAN_PROJECTED",
+            "STATION_IMPACT_NOT_APPLICABLE"
+          ]
+        },
+        {
+          "sequence": 2,
+          "tool": "inspect_route",
+          "status": "SUCCEEDED",
+          "provider": "F1_ROUTING_PROVIDER",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "ROUTE_EVIDENCE_VERIFIED"
+          ]
+        },
+        {
+          "sequence": 3,
+          "tool": "build_full_replan",
+          "status": "SUCCEEDED",
+          "provider": "F1_PLANNING_ORCHESTRATOR",
+          "freshness": "FRESH",
+          "reason_codes": [
+            "DETERMINISTIC_FEASIBILITY"
+          ]
+        },
+        {
+          "sequence": 4,
+          "tool": "compare_plans",
+          "status": "SUCCEEDED",
+          "provider": "F4_PLAN_DIFF_ENGINE",
+          "freshness": "NOT_APPLICABLE",
+          "reason_codes": [
+            "PLAN_COMPARISON_COMPLETED"
+          ]
+        }
+      ],
+      "candidate_present": true,
+      "candidate_count": 0
+    }
+  }
+]

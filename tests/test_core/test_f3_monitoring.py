@@ -5,12 +5,14 @@ import pytest
 
 from src.packages.contracts.monitoring import (
     MonitoringThresholds,
+    SimulationDecisionRequest,
     SimulatorStartRequest,
     TelemetrySnapshot,
 )
 from src.packages.contracts.trips import PlanProposal
 from src.packages.core.monitoring.application.service import MonitoringEvaluator, MonitoringSimulatorService
 from src.packages.core.monitoring.domain.risk import SOCRiskState
+from src.packages.core.trips.application.errors import AppError
 
 
 class EventRepository:
@@ -134,6 +136,7 @@ def test_simulator_injects_the_exact_requested_boundary_value(
 def test_simulator_can_pause_resume_and_reset_the_same_scenario():
     service = MonitoringSimulatorService(EventRepository())
     session = _scenario_session("ROUTE_DEVIATION", 2.01)
+    session.request = session.request.model_copy(update={"seed": 210})
     service._sessions[session.trip_id] = session
 
     paused = service.pause("trip-1", "owner-1")
@@ -143,6 +146,7 @@ def test_simulator_can_pause_resume_and_reset_the_same_scenario():
     reset = service.reset("trip-1", "owner-1")
 
     assert paused.status == "PAUSED"
+    assert paused.seed == 210
     assert unchanged.tick_count == 0
     assert resumed.status == "RUNNING"
     assert advanced.tick_count == 1
@@ -151,6 +155,7 @@ def test_simulator_can_pause_resume_and_reset_the_same_scenario():
     assert reset.tick_count == 0
     assert reset.telemetry is None
     assert reset.events == []
+    assert reset.seed == 210
     assert reset.selected_scenario == "ROUTE_DEVIATION"
     assert service._sessions["trip-1"].request.scenario_value == 2.01
 
@@ -223,6 +228,30 @@ def test_multi_event_request_requires_two_distinct_events(scenario_events):
 
 def test_station_unavailable_is_explicit_simulator_event():
     assert MonitoringEvaluator().classify(station_unavailable=True) == "STATION_UNAVAILABLE"
+
+
+def test_station_outage_on_confirmed_station_plan_emits_once_as_simulated():
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session("STATION_UNAVAILABLE", 0)
+    session.plan.charging_stops = [SimpleNamespace(
+        station_id="ST-CONTROLLED",
+        name="Controlled charging station",
+        distance_from_origin_km=8.0,
+    )]
+    service._sessions[session.trip_id] = session
+
+    first = service.tick("trip-1", "owner-1")
+    second = service.tick("trip-1", "owner-1")
+    station_events = [
+        event for event in second.events
+        if event.event_type == "STATION_UNAVAILABLE"
+    ]
+
+    assert first.status == "RUNNING"
+    assert second.status == "AWAITING_DECISION"
+    assert len(station_events) == 1
+    assert station_events[0].source == "SIMULATED"
+    assert station_events[0].station_ids == ["ST-CONTROLLED"]
 
 
 def test_simulation_pacing_scales_with_trip_distance():
@@ -352,6 +381,9 @@ def test_refreshing_stale_telemetry_resolves_event_and_resumes_current_plan():
     session = SimpleNamespace(
         trip_id="trip-1",
         plan=SimpleNamespace(plan_id="plan-1", version=1),
+        request=SimulatorStartRequest(
+            plan_id="plan-1", scenario="STALE_TELEMETRY", seed=210,
+        ),
         scenario="STALE_TELEMETRY",
         status="RUNNING",
         tick_count=5,
@@ -379,6 +411,21 @@ def test_refreshing_stale_telemetry_resolves_event_and_resumes_current_plan():
     assert refreshed.telemetry.snapshot_id
     assert refreshed.events[-1].status == "RESOLVED"
     assert repository.resolved_event_ids == [refreshed.events[-1].event_id]
+
+
+def test_replan_required_unsafe_decision_rejects_continue_and_keeps_session_awaiting():
+    service = MonitoringSimulatorService(EventRepository())
+    session = _scenario_session("SOC_UNDERPERFORMANCE", 5.1)
+    service._emit(session, "SOC_UNDERPERFORMANCE", "unsafe SOC", {"deficit_percent": 5.1})
+    service._sessions[session.trip_id] = session
+
+    with pytest.raises(AppError) as error:
+        service.decide(session.trip_id, "owner-1", SimulationDecisionRequest(decision="CONTINUE"))
+
+    assert error.value.code == "REPLAN_REQUIRED"
+    assert error.value.status_code == 409
+    assert session.status == "AWAITING_DECISION"
+    assert session.replan_required is True
 
 
 def test_activating_replan_keeps_vehicle_at_incident_position_instead_of_restarting_trip():

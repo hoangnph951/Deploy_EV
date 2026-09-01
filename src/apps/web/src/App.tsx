@@ -212,6 +212,10 @@ export default function App() {
   const destinationAddress = watch("destinationAddress");
   const initialSocPercent = watch("initialSocPercent");
 
+  useEffect(() => {
+    if (Number(initialSocPercent) >= 20) setWarningMessage("");
+  }, [initialSocPercent]);
+
   const selectedVehicle = userVehicles.find((vehicle) => vehicle.id === selectedVehicleId)
     ?? userVehicles.find((vehicle) => vehicle.is_default)
     ?? userVehicles[0]

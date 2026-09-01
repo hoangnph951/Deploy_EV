@@ -1864,6 +1864,7 @@ body {
 .f4-decision-timeline { display: grid; gap: .75rem; margin: .75rem 0 0; padding-left: 1.5rem; }
 .f4-decision-timeline li { padding: .75rem; border-left: 3px solid #38bdf8; border-radius: .5rem; background: rgba(14, 165, 233, .08); }
 .f4-decision-timeline li > div { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.f4-trace-heading { white-space: pre-line; }
 .f4-decision-timeline small { display: block; margin-top: .25rem; }
 .f4-decision-timeline li { animation: f4-trace-in .3s ease both; }
 .f4-decision-timeline li.f4-trace-reflecting { border-left-color: #a78bfa; background: rgba(139, 92, 246, .1); }

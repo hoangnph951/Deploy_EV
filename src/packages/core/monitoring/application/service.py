@@ -439,6 +439,12 @@ class MonitoringSimulatorService:
             if request.decision == "STOP":
                 session.status = "STOPPED"
             elif request.decision == "CONTINUE":
+                if session.replan_required:
+                    raise AppError(
+                        "REPLAN_REQUIRED",
+                        409,
+                        "A replacement plan decision is required before this unsafe trip can continue.",
+                    )
                 session.status = "RUNNING"
                 session.replan_required = False
             else:
@@ -548,7 +554,10 @@ class MonitoringSimulatorService:
     @staticmethod
     def _state(session: _Session) -> SimulationState:
         return SimulationState(
-            trip_id=session.trip_id, plan_id=session.plan.plan_id, status=session.status,
+            trip_id=session.trip_id, plan_id=session.plan.plan_id,
+            seed=session.request.seed,
+            simulation_fault=session.request.simulation_fault,
+            status=session.status,
             selected_scenario=session.scenario, telemetry=session.telemetry, events=session.events,
             unavailable_station_ids=session.unavailable_station_ids,
             replan_required=session.replan_required, agent_invocation_count=0,

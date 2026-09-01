@@ -5,7 +5,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.packages.contracts.monitoring import MonitoringEvent, TelemetrySnapshot
+from src.packages.contracts.monitoring import (
+    MonitoringEvent,
+    SimulationFault,
+    TelemetrySnapshot,
+)
 
 
 ReplanAction = Literal[
@@ -62,6 +66,7 @@ class TripContextSnapshot(BaseModel):
 class ReplanSubmissionRequest(BaseModel):
     telemetry: TelemetrySnapshot
     events: list[MonitoringEvent] = Field(min_length=1)
+    simulation_fault: SimulationFault = "NONE"
 
 
 class PlanDecisionRequest(BaseModel):

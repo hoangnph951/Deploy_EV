@@ -13,7 +13,7 @@ EVENT_DIAGNOSTICS: dict[str, tuple[str, ...]] = {
 
 
 def required_diagnostics(event_types: list[str]) -> list[str]:
-    ordered = ["inspect_telemetry"]
+    ordered: list[str] = []
     if "STALE_TELEMETRY" in event_types:
         return ordered
     ordered.append("project_current_plan")
@@ -37,26 +37,6 @@ class DiagnosticRegistry:
         current_plan_projection: dict | None = None,
     ) -> DiagnosticObservation:
         snapshot_ref = f"telemetry:{telemetry.snapshot_id or context.telemetry_snapshot_id}"
-        if name == "inspect_telemetry":
-            blocked = context.unresolved_constraints.telemetry_blocked or telemetry.freshness == "STALE"
-            return DiagnosticObservation(
-                tool=name,
-                status="BLOCKED" if blocked else "SUCCEEDED",
-                provider="F3_TELEMETRY",
-                freshness="STALE" if blocked else "FRESH",
-                facts={
-                    "snapshot_id": telemetry.snapshot_id,
-                    "lat": telemetry.lat,
-                    "lon": telemetry.lon,
-                    "soc_percent": telemetry.soc_percent,
-                },
-                evidence_refs=[snapshot_ref],
-                reason_codes=["TELEMETRY_BLOCKED"] if blocked else ["TELEMETRY_VERIFIED"],
-                public_summary=(
-                    "GPS hoặc mức pin đã cũ, không được dùng để lập lại kế hoạch."
-                    if blocked else f"GPS hợp lệ; SOC hiện tại {telemetry.soc_percent:.1f}%."
-                ),
-            )
         if name == "project_current_plan":
             projection = current_plan_projection or {
                 "confirmed_plan_version": context.current_confirmed_plan_version,

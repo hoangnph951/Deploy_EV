@@ -165,6 +165,30 @@ def test_openai_web_station_rejects_url_not_returned_by_web_search() -> None:
     assert _find(service) == []
 
 
+def test_openai_authentication_failure_is_typed_for_operator_recovery() -> None:
+    class UnauthorizedResponses:
+        def parse(self, **kwargs):
+            from openai import OpenAIError
+
+            error = OpenAIError("invalid key")
+            error.status_code = 401
+            raise error
+
+    class UnauthorizedClient:
+        responses = UnauthorizedResponses()
+
+    service = OpenAIWebStationDataService(
+        api_key="bad-key",
+        model="test-web-model",
+        geocoder=FakeGeocoder(),
+        client=UnauthorizedClient(),
+    )
+    with pytest.raises(StationProviderError) as captured:
+        _find(service)
+    assert captured.value.code == "OPENAI_AUTHENTICATION_FAILED"
+    assert captured.value.http_status == 401
+
+
 def test_openai_station_window_searches_reachable_slice_and_caches_result() -> None:
     service, client = _search_service([SOURCE_URL])
     polyline = [[21.0, 105.8], [20.5, 105.8], [20.0, 105.8], [19.5, 105.8]]
@@ -232,3 +256,23 @@ def test_fallback_provider_recovers_primary_failure() -> None:
     assert len(stations) == 1
     assert stations[0].provenance is not None
     assert stations[0].provenance.retrieved_at <= datetime.now(UTC)
+
+
+def test_fallback_provider_does_not_silently_return_empty_search() -> None:
+    service = FallbackStationDataService(
+        primary=StaticStationService(),
+        fallback=StaticStationService(),
+    )
+
+    with pytest.raises(StationProviderError, match="without a grounded candidate"):
+        _find(service)
+
+
+def test_fallback_provider_surfaces_fallback_failure_after_empty_primary() -> None:
+    service = FallbackStationDataService(
+        primary=StaticStationService(),
+        fallback=StaticStationService(fail=True),
+    )
+
+    with pytest.raises(StationProviderError, match="providers are unavailable"):
+        _find(service)

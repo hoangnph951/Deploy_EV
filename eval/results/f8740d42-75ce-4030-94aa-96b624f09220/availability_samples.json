@@ -1,0 +1,372 @@
+[
+  {
+    "offset_seconds": 1.00000761449337e-07,
+    "observed_at": "2026-09-01 13:02:17.923913+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 55.53330003749579,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.104119100025855,
+    "observed_at": "2026-09-01 13:02:17.987257+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 13.991000014357269,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.21366570005193353,
+    "observed_at": "2026-09-01 13:02:18.101393+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 19.5215999847278,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.3234770999988541,
+    "observed_at": "2026-09-01 13:02:18.209081+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 17.18059997074306,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.43319310003425926,
+    "observed_at": "2026-09-01 13:02:18.319267+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 17.42970000486821,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.5411185000557452,
+    "observed_at": "2026-09-01 13:02:18.424794+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 15.056199976243079,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.6493618000531569,
+    "observed_at": "2026-09-01 13:02:18.535649+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 17.14959996752441,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.7593608000315726,
+    "observed_at": "2026-09-01 13:02:18.643878+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 15.74800000526011,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.8683599000796676,
+    "observed_at": "2026-09-01 13:02:18.754751+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 18.075899919494987,
+    "error": null
+  },
+  {
+    "offset_seconds": 0.9780995000619441,
+    "observed_at": "2026-09-01 13:02:18.859899+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 13.327699969522655,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.087164600030519,
+    "observed_at": "2026-09-01 13:02:18.972918+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 16.71819994226098,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.1968664000742137,
+    "observed_at": "2026-09-01 13:02:19.085171+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 19.439399940893054,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.3054322000825778,
+    "observed_at": "2026-09-01 13:02:19.191222+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 17.541499924845994,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.4150798000628129,
+    "observed_at": "2026-09-01 13:02:19.298236+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 14.478099998086691,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.5251442000735551,
+    "observed_at": "2026-09-01 13:02:19.408283+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 14.556100009940565,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.634320600074716,
+    "observed_at": "2026-09-01 13:02:19.516316+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 12.867099954746664,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.7428421000950038,
+    "observed_at": "2026-09-01 13:02:19.625784+00:00",
+    "phase": "BASELINE",
+    "available": false,
+    "status_code": 200,
+    "outcome": "HEALTHY",
+    "latency_ms": 14.215499977581203,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.8516884000273421,
+    "observed_at": "2026-09-01 13:02:19.749897+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 12.3937000753358,
+    "error": null
+  },
+  {
+    "offset_seconds": 1.977247100090608,
+    "observed_at": "2026-09-01 13:02:19.859843+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 14.39390005543828,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.0870812000939623,
+    "observed_at": "2026-09-01 13:02:19.971133+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 14.897800050675869,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.197249500080943,
+    "observed_at": "2026-09-01 13:02:20.087013+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 21.392500028014183,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.304411300108768,
+    "observed_at": "2026-09-01 13:02:20.186312+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 13.162099989131093,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.413515800028108,
+    "observed_at": "2026-09-01 13:02:20.295439+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 13.568300055339932,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.5230397999985144,
+    "observed_at": "2026-09-01 13:02:20.407863+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 16.028600046411157,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.6322256000712514,
+    "observed_at": "2026-09-01 13:02:20.518020+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 17.079700017347932,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.7402847000630572,
+    "observed_at": "2026-09-01 13:02:20.624334+00:00",
+    "phase": "LLM_TIMEOUT",
+    "available": true,
+    "status_code": 200,
+    "outcome": "SAFE_FALLBACK",
+    "latency_ms": 15.841200016438961,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.847917800070718,
+    "observed_at": "2026-09-01 13:02:20.761722+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 13.212600024417043,
+    "error": null
+  },
+  {
+    "offset_seconds": 2.9881514000007883,
+    "observed_at": "2026-09-01 13:02:20.873091+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 16.252700006589293,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.099036000086926,
+    "observed_at": "2026-09-01 13:02:20.989867+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 22.54250005353242,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.20751580002252,
+    "observed_at": "2026-09-01 13:02:21.087828+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 11.740999994799495,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.315832000109367,
+    "observed_at": "2026-09-01 13:02:21.197569+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 13.298600097186863,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.423829600098543,
+    "observed_at": "2026-09-01 13:02:21.311180+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 18.169700051657856,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.5307402000762522,
+    "observed_at": "2026-09-01 13:02:21.412718+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 13.418199960142374,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.639119900064543,
+    "observed_at": "2026-09-01 13:02:21.520810+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 13.45590001437813,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.7494523000204936,
+    "observed_at": "2026-09-01 13:02:21.631841+00:00",
+    "phase": "F1_PROVIDER_FAILURE",
+    "available": true,
+    "status_code": 200,
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "latency_ms": 14.15669999551028,
+    "error": null
+  },
+  {
+    "offset_seconds": 3.8762678001075983,
+    "observed_at": "2026-09-01 13:02:23.767871+00:00",
+    "phase": "FORCED_RESTART",
+    "available": false,
+    "status_code": null,
+    "outcome": "TIMEOUT",
+    "latency_ms": 2022.4609998986125,
+    "error": "TIMEOUT"
+  },
+  {
+    "offset_seconds": 3.8579229000024498,
+    "observed_at": "2026-09-01 13:02:25.790182+00:00",
+    "phase": "POST_RESTART",
+    "available": false,
+    "status_code": null,
+    "outcome": "TIMEOUT",
+    "latency_ms": 2018.4904000489041,
+    "error": "TIMEOUT"
+  }
+]

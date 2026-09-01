@@ -23,6 +23,10 @@ export function completeF4Confirmation(run: ReplanningOutcome, confirmedPlanId: 
   return { run, confirmedPlanId };
 }
 
+export function completeF4Rejection(run: ReplanningOutcome, rejectedPlanId: string) {
+  return { run, rejectedPlanId, continueAvailable: false };
+}
+
 export function isPendingF4Plan(activePlan: PlanProposal, candidate: PlanProposal | null): boolean {
   return Boolean(
     candidate

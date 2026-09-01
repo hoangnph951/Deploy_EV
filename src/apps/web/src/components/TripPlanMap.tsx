@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getGoongMaps, getGoongStyleUrl, goongMapsConfigured } from "../lib/goongMaps";
+import { simulatedIncidentMarker } from "../lib/replanningPresentation";
 import type { PlaceSelection, PlanProposal, SimulationState } from "../lib/types";
 
 type Props = {
@@ -249,9 +250,15 @@ export function TripPlanMap({
     });
 
     if (telemetry) {
+      const incidentMarker = simulatedIncidentMarker(telemetry.lat, telemetry.lon);
       addMarker(
-        [telemetry.lon, telemetry.lat], "🚗", "Xe mô phỏng",
-        [`SOC ${telemetry.soc_percent.toFixed(1)}%`, `${telemetry.speed_kph.toFixed(0)} km/h`, telemetry.freshness],
+        [telemetry.lon, telemetry.lat], "🚗", incidentMarker.title,
+        [
+          incidentMarker.coordinateLine,
+          `SOC ${telemetry.soc_percent.toFixed(1)}%`,
+          `${telemetry.speed_kph.toFixed(0)} km/h`,
+          telemetry.freshness,
+        ],
         telemetry.freshness === "STALE" ? "#d97706" : "#7c3aed",
       );
     }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -199,6 +200,12 @@ def station_energy_node(state: AgentState) -> dict:
             station_service=runtime.station_service,
             energy_tool=runtime.energy_tool,
             feasibility_tool=runtime.feasibility_tool,
+            station_edge_repository=runtime.station_edge_repository,
+            station_graph_enabled=runtime.station_graph_enabled,
+            station_graph_routing_provider=runtime.station_graph_routing_provider,
+            station_graph_routing_profile=runtime.station_graph_routing_profile,
+            station_graph_road_version=runtime.station_graph_road_version,
+            station_graph_edge_max_age_seconds=runtime.station_graph_edge_max_age_seconds,
         ).plan(
             base_route=route_result,
             origin_lat=state["origin_lat"],
@@ -262,6 +269,7 @@ def station_energy_node(state: AgentState) -> dict:
     legacy_profiles = (
         _STATION_SEARCH_PROFILES
         if not validated
+        and not adaptive_supported
         and callable(getattr(runtime.station_service, "find_corridor_stations", None))
         else ()
     )
@@ -511,6 +519,12 @@ def recovery_node(state: AgentState) -> dict:
         station_service=runtime.station_service,
         energy_tool=runtime.energy_tool,
         feasibility_tool=runtime.feasibility_tool,
+        station_edge_repository=runtime.station_edge_repository,
+        station_graph_enabled=runtime.station_graph_enabled,
+        station_graph_routing_provider=runtime.station_graph_routing_provider,
+        station_graph_routing_profile=runtime.station_graph_routing_profile,
+        station_graph_road_version=runtime.station_graph_road_version,
+        station_graph_edge_max_age_seconds=runtime.station_graph_edge_max_age_seconds,
     ).plan(
         base_route=route_result,
         origin_lat=state["origin_lat"],
@@ -613,12 +627,61 @@ def no_feasible_plan_node(state: AgentState) -> dict:
     energy_result = state.get("energy_result")
     route_result = state.get("route_result")
     vehicle_profile = state.get("vehicle_profile")
+    direct_route_distance_km: float | None = None
+    estimated_reachable_distance_km: float | None = None
+    estimated_energy_required_kwh: float | None = None
+    available_energy_before_reserve_kwh: float | None = None
+    energy_shortfall_kwh: float | None = None
+    estimated_minimum_charging_stops: int | None = None
+    usable_battery_kwh: float | None = None
+    nearest_candidate_station_name: str | None = None
+    nearest_candidate_station_distance_km: float | None = None
+    candidates = state.get("candidate_stations", [])
+    if candidates:
+        nearest_candidate = min(
+            candidates,
+            key=lambda station: station.distance_from_origin_km,
+        )
+        nearest_candidate_station_name = nearest_candidate.name
+        nearest_candidate_station_distance_km = max(
+            0.0, nearest_candidate.distance_from_origin_km
+        )
     if energy_result is not None and route_result is not None and vehicle_profile is not None:
+        direct_route_distance_km = max(0.0, route_result.distance_km)
+        usable_battery_kwh = max(10.0, vehicle_profile.usable_capacity_kwh)
+        effective_consumption_kwh_per_km = (
+            energy_result.effective_consumption_wh_per_km / 1000.0
+        )
+        estimated_energy_required_kwh = (
+            direct_route_distance_km * effective_consumption_kwh_per_km
+        )
+        initial_soc = min(100.0, max(0.0, state.get("initial_soc_percent", 80.0)))
+        available_energy_before_reserve_kwh = max(
+            0.0,
+            usable_battery_kwh * (initial_soc - reserve_soc) / 100.0,
+        )
+        if effective_consumption_kwh_per_km > 0:
+            estimated_reachable_distance_km = (
+                available_energy_before_reserve_kwh
+                / effective_consumption_kwh_per_km
+            )
+        energy_shortfall_kwh = max(
+            0.0,
+            estimated_energy_required_kwh - available_energy_before_reserve_kwh,
+        )
+        energy_available_per_full_charge_kwh = max(
+            0.0,
+            usable_battery_kwh * (100.0 - reserve_soc) / 100.0,
+        )
+        if energy_available_per_full_charge_kwh > 0:
+            estimated_minimum_charging_stops = math.ceil(
+                energy_shortfall_kwh / energy_available_per_full_charge_kwh
+            )
         direct_required = reserve_soc + (
-            route_result.distance_km
+            direct_route_distance_km
             * energy_result.effective_consumption_wh_per_km
             / 1000.0
-            / max(10.0, vehicle_profile.usable_capacity_kwh)
+            / usable_battery_kwh
             * 100.0
         )
         minimum_initial_soc = (
@@ -648,7 +711,43 @@ def no_feasible_plan_node(state: AgentState) -> dict:
         minimum_initial_soc_percent=(
             round(minimum_initial_soc, 1) if minimum_initial_soc is not None else None
         ),
-        evaluated_station_count=len(state.get("candidate_stations", [])),
+        direct_route_distance_km=(
+            round(direct_route_distance_km, 2)
+            if direct_route_distance_km is not None
+            else None
+        ),
+        estimated_reachable_distance_km=(
+            round(estimated_reachable_distance_km, 2)
+            if estimated_reachable_distance_km is not None
+            else None
+        ),
+        estimated_energy_required_kwh=(
+            round(estimated_energy_required_kwh, 2)
+            if estimated_energy_required_kwh is not None
+            else None
+        ),
+        available_energy_before_reserve_kwh=(
+            round(available_energy_before_reserve_kwh, 2)
+            if available_energy_before_reserve_kwh is not None
+            else None
+        ),
+        energy_shortfall_kwh=(
+            round(energy_shortfall_kwh, 2)
+            if energy_shortfall_kwh is not None
+            else None
+        ),
+        estimated_minimum_charging_stops=estimated_minimum_charging_stops,
+        vehicle_profile_name=(vehicle_profile.name if vehicle_profile is not None else None),
+        usable_battery_kwh=(
+            round(usable_battery_kwh, 2) if usable_battery_kwh is not None else None
+        ),
+        nearest_candidate_station_name=nearest_candidate_station_name,
+        nearest_candidate_station_distance_km=(
+            round(nearest_candidate_station_distance_km, 2)
+            if nearest_candidate_station_distance_km is not None
+            else None
+        ),
+        evaluated_station_count=len(candidates),
         suggestions=suggestions,
         search_scope="ADAPTIVE_CORRIDOR_5_10_20_KM",
         created_at=datetime.now(UTC),

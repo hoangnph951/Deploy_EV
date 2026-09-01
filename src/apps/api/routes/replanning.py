@@ -20,11 +20,31 @@ from src.packages.core.replanning.api.dependencies import get_replanning_runtime
 from src.packages.core.replanning.application.plan_diff import PlanDiffEngine, PlanMetrics
 from src.packages.core.replanning.application.runtime import ReplanningRuntimeStore
 from src.packages.core.replanning.application.service import ReplanningOutcome, ReplanningService
+from src.packages.core.replanning.application.simulation_faults import (
+    SimulationFaultCandidatePlanner,
+)
 from src.packages.core.trips.api.dependencies import get_trip_service
 from src.packages.core.trips.application.errors import AppError
 from src.packages.core.trips.application.service import TripService
 
 router = APIRouter(tags=["replanning"])
+
+
+def _get_plan_state(
+    trip_service: TripService,
+    trip_id: str,
+    owner_id: str,
+) -> tuple[int, int | None]:
+    plans = trip_service.get_trip_plans(trip_id, owner_id=owner_id).plans
+    pending_plan_version = max(
+        (
+            plan.version
+            for plan in plans
+            if plan.status in {"PENDING", "CONDITIONAL"}
+        ),
+        default=None,
+    )
+    return len(plans), pending_plan_version
 
 
 def _build_supervisor(settings: Settings):
@@ -47,6 +67,12 @@ def _build_supervisor(settings: Settings):
         timeout_seconds=settings.openai_replanning_timeout_seconds,
         max_turns=settings.replanning_max_llm_turns,
     )
+
+
+def get_replanning_supervisor(settings: Settings = Depends(get_settings)):
+    """Provide the configured supervisor at the API composition boundary."""
+
+    return _build_supervisor(settings)
 
 
 class TripServiceCandidatePlanner:
@@ -105,7 +131,9 @@ class TripServiceCandidatePlanner:
             "original_station_ids": original_station_ids,
             "affected_excluded_station_ids": affected,
             "unaffected_remaining_station_ids": unaffected,
-            "station_unavailable_affects_remaining_trip": bool(affected),
+            "station_unavailable_affects_remaining_trip": (
+                bool(affected) if excluded else None
+            ),
             "remaining_distance_km": round(remaining_distance, 3),
             "remaining_duration_min": round(plan.route.duration_min * duration_ratio, 3),
             "remaining_min_soc_percent": min(remaining_soc or [plan.final_arrival_soc_percent]),
@@ -262,6 +290,30 @@ class TripServiceCandidatePlanner:
         return min(eligible, key=lambda item: (item[0], item[1]))[2] if eligible else None
 
 
+def _candidate_planner(
+    trip_service: TripService,
+    owner_id: str,
+    body: ReplanSubmissionRequest,
+    settings: Settings,
+):
+    delegate = TripServiceCandidatePlanner(trip_service, owner_id)
+    if body.simulation_fault == "NONE":
+        return delegate
+    if not settings.simulator_fault_injection_enabled:
+        raise AppError(
+            "SIMULATOR_FAULT_INJECTION_DISABLED",
+            403,
+            "Simulator fault injection is disabled.",
+        )
+    if body.telemetry.source != "SIMULATED":
+        raise AppError(
+            "SIMULATOR_FAULT_REQUIRES_SIMULATED_TELEMETRY",
+            422,
+            "Fault injection is allowed only for simulated telemetry.",
+        )
+    return SimulationFaultCandidatePlanner(delegate, body.simulation_fault)
+
+
 @router.post(
     "/trips/{trip_id}/replans",
     response_model=ReplanningOutcome,
@@ -274,6 +326,7 @@ def submit_replan(
     trip_service: TripService = Depends(get_trip_service),
     store: ReplanningRuntimeStore = Depends(get_replanning_runtime_store),
     settings: Settings = Depends(get_settings),
+    supervisor=Depends(get_replanning_supervisor),
 ) -> ReplanningOutcome:
     trip = trip_service.get_trip(trip_id, owner_id=owner_id)
     if any(item.trip_id != trip_id for item in body.events):
@@ -287,11 +340,15 @@ def submit_replan(
     existing = store.find_idempotent(idempotency_key, owner_id)
     if existing is not None:
         return existing
-    plan_count = len(trip_service.get_trip_plans(trip_id, owner_id=owner_id).plans)
-    previous = store.initial_context(trip, plan_count)
-    supervisor = _build_supervisor(settings)
+    plan_count, pending_plan_version = _get_plan_state(trip_service, trip_id, owner_id)
+    previous = store.initial_context(
+        trip,
+        plan_count,
+        pending_plan_version=pending_plan_version,
+    )
     outcome = ReplanningService(
-        planner=TripServiceCandidatePlanner(trip_service, owner_id), supervisor=supervisor,
+        planner=_candidate_planner(trip_service, owner_id, body, settings),
+        supervisor=supervisor,
     ).process(previous_context=previous, telemetry=body.telemetry, events=body.events)
     if previous.pending_plan_version is not None:
         trip_service.stale_pending_plan(
@@ -310,6 +367,7 @@ async def stream_replan(
     trip_service: TripService = Depends(get_trip_service),
     store: ReplanningRuntimeStore = Depends(get_replanning_runtime_store),
     settings: Settings = Depends(get_settings),
+    supervisor=Depends(get_replanning_supervisor),
 ) -> StreamingResponse:
     trip = trip_service.get_trip(trip_id, owner_id=owner_id)
     if any(item.trip_id != trip_id for item in body.events):
@@ -319,8 +377,13 @@ async def stream_replan(
     base_version = max(item.related_plan_version for item in body.events)
     idempotency_key = f"{trip_id}:{body.telemetry.snapshot_id}:{base_version}:{event_ids}"
     existing = store.find_idempotent(idempotency_key, owner_id)
-    plan_count = len(trip_service.get_trip_plans(trip_id, owner_id=owner_id).plans)
-    previous = store.initial_context(trip, plan_count)
+    plan_count, pending_plan_version = _get_plan_state(trip_service, trip_id, owner_id)
+    previous = store.initial_context(
+        trip,
+        plan_count,
+        pending_plan_version=pending_plan_version,
+    )
+    planner = _candidate_planner(trip_service, owner_id, body, settings)
     event_loop = asyncio.get_running_loop()
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -335,8 +398,8 @@ async def stream_replan(
                 outcome = existing
             else:
                 outcome = ReplanningService(
-                    planner=TripServiceCandidatePlanner(trip_service, owner_id),
-                    supervisor=_build_supervisor(settings),
+                    planner=planner,
+                    supervisor=supervisor,
                     on_trace=emit_trace,
                 ).process(
                     previous_context=previous,
@@ -448,8 +511,12 @@ def confirm_plan(
     store: ReplanningRuntimeStore = Depends(get_replanning_runtime_store),
 ) -> PlanDecisionResponse:
     trip = trip_service.get_trip(trip_id, owner_id=owner_id)
-    plan_count = len(trip_service.get_trip_plans(trip_id, owner_id=owner_id).plans)
-    context = store.initial_context(trip, plan_count)
+    plan_count, pending_plan_version = _get_plan_state(trip_service, trip_id, owner_id)
+    context = store.initial_context(
+        trip,
+        plan_count,
+        pending_plan_version=pending_plan_version,
+    )
     if body.expected_plan_version != version or body.expected_context_version != context.context_version:
         from src.packages.core.trips.application.errors import AppError
         raise AppError(
@@ -480,12 +547,18 @@ def reject_plan(
     store: ReplanningRuntimeStore = Depends(get_replanning_runtime_store),
 ) -> PlanDecisionResponse:
     trip = trip_service.get_trip(trip_id, owner_id=owner_id)
-    plan_count = len(trip_service.get_trip_plans(trip_id, owner_id=owner_id).plans)
-    context = store.initial_context(trip, plan_count)
+    plan_count, pending_plan_version = _get_plan_state(trip_service, trip_id, owner_id)
+    context = store.initial_context(
+        trip,
+        plan_count,
+        pending_plan_version=pending_plan_version,
+    )
     if body.expected_plan_version != version or body.expected_context_version != context.context_version:
         from src.packages.core.trips.application.errors import AppError
         raise AppError("PLAN_CONTEXT_CHANGED", 409, "Trip context changed before rejection.")
     trip_service.decide_plan(trip_id, owner_id, version, "REJECTED")
+    if context.pending_plan_version == version:
+        context.pending_plan_version = None
     return PlanDecisionResponse(
         trip_id=trip_id, plan_version=version,
         context_version=context.context_version, status="REJECTED",

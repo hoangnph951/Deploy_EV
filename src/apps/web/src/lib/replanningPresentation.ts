@@ -20,7 +20,6 @@ const labels = {
   REQUEST_NEW_TELEMETRY: "Yêu cầu dữ liệu xe mới",
   STOP_INSUFFICIENT_EVIDENCE: "Dừng vì chưa đủ bằng chứng",
   NO_FEASIBLE_PLAN_REQUEST_ASSISTANCE: "Yêu cầu hỗ trợ vì chưa có hành trình an toàn",
-  inspect_telemetry: "Kiểm tra vị trí và mức pin hiện tại",
   project_current_plan: "Đánh giá phần hành trình còn lại",
   inspect_route: "Kiểm tra tuyến đường",
   inspect_energy: "Kiểm tra mức tiêu thụ và dự phòng pin",
@@ -41,6 +40,34 @@ export const labelStatus = label;
 export const labelHypothesis = label;
 export const labelAction = label;
 export const labelTool = label;
+
+export function traceHeading(stage: string, tool?: string | null): string {
+  return tool ? `${labelStage(stage)}\n${labelTool(tool)}` : labelStage(stage);
+}
+
+export function publicEvidenceSummary(
+  evidenceRefs: string[],
+  excludedStationIds: string[],
+): { evidenceNotice: string; excludedStationsNotice: string } {
+  return {
+    evidenceNotice: evidenceRefs.length
+      ? "Bằng chứng an toàn đã được hệ thống kiểm tra nội bộ."
+      : "Chưa có bằng chứng an toàn phù hợp để sử dụng.",
+    excludedStationsNotice: excludedStationIds.length
+      ? `${excludedStationIds.length} trạm không khả dụng đã được loại khỏi phương án.`
+      : "Không có trạm nào bị loại khỏi phương án.",
+  };
+}
+
+export function simulatedIncidentMarker(lat: number, lon: number): {
+  title: string;
+  coordinateLine: string;
+} {
+  return {
+    title: "V\u1ecb tr\u00ed s\u1ef1 c\u1ed1 m\u00f4 ph\u1ecfng",
+    coordinateLine: `T\u1ecda \u0111\u1ed9 ${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+  };
+}
 
 export type TraceResponseSource = "OPENAI" | "SAFE_FALLBACK" | "DETERMINISTIC";
 

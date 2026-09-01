@@ -5,7 +5,7 @@
 **Trạng thái:** Source of truth cho triển khai  
 **Phạm vi:** Telemetry, monitoring và mô phỏng chuyến đi đang diễn ra
 
-**Tài liệu liên quan:** [FEATURE_4_IMPLEMENT.md](FEATURE_4_IMPLEMENT.md), [agent_architecture_for_f1.md](agent_architecture_for_f1.md)
+**Tài liệu liên quan:** [FEATURE_4_IMPLEMENTATION_SPEC_v2.0.md](FEATURE_4_IMPLEMENTATION_SPEC_v2.0.md), [agent_architecture.md](agent_architecture.md)
 
 ## 1. Mục tiêu
 
@@ -489,3 +489,26 @@ MVP dùng REST polling 1–2 giây. Chưa cần WebSocket, Redis, Kafka, PostGIS
 - UI cho chọn case, điều khiển replay và quan sát GPS/SOC/event/F4.
 - Persistence, idempotency, cooldown, ownership và recovery có test.
 - Mọi run truy được case snapshot, seed, tick, telemetry, event và plan version.
+
+## 14. Mentor review deterministic controls — 2026-09-01
+
+Runtime F3 cho phép operator nhập `seed`; backend giữ seed trong request và trả lại ở mọi `SimulationState`. Pause/resume không làm đổi seed; reset phát lại cùng scenario, boundary value và seed từ tick 0. Frontend không còn dùng `Date.now()` để tự sinh seed.
+
+Các threshold dùng strict `>`: lệch tuyến `1.99/2.00/2.01 km`, SOC `4.9/5.0/5.1%`, telemetry `60/61 giây`. Multi-event dùng một telemetry snapshot và một tick cho 2–3 canonical events.
+
+`STATION_UNAVAILABLE` chỉ được chọn khi confirmed proposal thật sự có `charging_stops`. Simulator không tự dựng trạm giả và không dùng bước xác minh GPS thật để chặn GPS mô phỏng. Event có `source=SIMULATED`, phát đúng một lần và đưa run vào `AWAITING_DECISION`.
+
+Control F1 fault dành cho demo có ba giá trị typed: `NONE`, `F1_PROVIDER_FAILURE`, `F1_PROVEN_INFEASIBLE`. Control chỉ hiển thị khi `GET /api/v1/simulator/capabilities` trả `fault_injection_enabled=true`; backend mặc định tắt bằng `SIMULATOR_FAULT_INJECTION_ENABLED=false` và từ chối fault nếu telemetry không phải `SIMULATED`.
+
+Các endpoint simulator canonical đang dùng:
+
+| Method | Endpoint | Contract |
+|---|---|---|
+| `GET` | `/api/v1/simulator/capabilities` | Capability cho fault injection |
+| `POST` | `/api/v1/simulator/trips/{trip_id}/start` | Scenario, exact value, seed, typed fault |
+| `POST` | `/api/v1/simulator/trips/{trip_id}/tick` | Tiến một tick deterministic |
+| `POST` | `/api/v1/simulator/trips/{trip_id}/pause|resume|reset` | Replay controls |
+| `POST` | `/api/v1/simulator/trips/{trip_id}/refresh-telemetry` | Làm mới stale simulated telemetry |
+| `POST` | `/api/v1/simulator/trips/{trip_id}/activate-plan` | Kích hoạt plan đã được owner xác nhận |
+
+Coverage mentor được khóa bởi `test_f3_monitoring.py`, `test_monitoring_service.py`, `test_planning.py` và `test_f4.py`: `P210-F3-HAPPY-001`, `P210-F3-HAPPY-004`, `P210-F3-EDGE-002`, `P210-F3-EDGE-003`, `P210-F3-EDGE-005`, `P210-F3-EDGE-006`.

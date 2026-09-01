@@ -24,6 +24,7 @@ import type {
   SimulationScenarioSelection,
 } from "./types";
 import { withPlanningStreamTimeout } from "./planningStreamWatchdog";
+import { buildSimulationStartPayload } from "./simulationControls";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const LOCAL_TOKEN_KEY = "ev-route-access-token";
@@ -292,6 +293,7 @@ export async function submitF4Replan(
       signal: controller.signal,
       body: JSON.stringify({
         telemetry: { ...state.telemetry, snapshot_id: telemetryId },
+        simulation_fault: state.simulation_fault,
         events: (canonicalEvents?.length ? canonicalEvents : state.events).map((event) => ({
           ...event,
           telemetry_snapshot_id: event.telemetry_snapshot_id ?? telemetryId,
@@ -378,20 +380,23 @@ export async function startSimulation(
   scenario: SimulationScenarioSelection = "NORMAL",
   scenarioValue?: number,
   scenarioEvents?: import("./types").CompositeMonitoringEventType[],
+  seed = 210,
+  simulationFault: import("./types").SimulationFault = "NONE",
 ): Promise<SimulationState> {
   const response = await fetch(`${API_BASE_URL}/api/v1/simulator/trips/${tripId}/start`, {
     method: "POST", headers: authenticatedHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      plan_id: plan.plan_id,
-      plan,
-      seed: Date.now(),
-      scenario,
-      scenario_value: scenarioValue,
-      scenario_events: scenarioEvents,
-      unhappy_probability: 0.5,
-    }),
+    body: JSON.stringify(buildSimulationStartPayload(
+      plan, scenario, scenarioValue, scenarioEvents, seed, simulationFault,
+    )),
   });
   return parseApiResponse<SimulationState>(response);
+}
+
+export async function getSimulatorCapabilities(): Promise<import("./types").SimulatorCapabilities> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulator/capabilities`, {
+    headers: authenticatedHeaders(),
+  });
+  return parseApiResponse<import("./types").SimulatorCapabilities>(response);
 }
 
 export async function controlMonitoringSimulation(

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import create_engine, event, inspect
 
 from src.packages.contracts.monitoring import MonitoringEvent, TelemetrySnapshot
@@ -29,6 +30,60 @@ def test_f4_audit_tables_are_registered_and_creatable() -> None:
         "plan_diffs",
         "plan_version_events",
     } <= tables
+
+
+def test_get_latest_context_returns_highest_persisted_version(tmp_path) -> None:
+    database_url = f"sqlite:///{(tmp_path / 'f4-context-hydration.db').as_posix()}"
+    repository = SqlAlchemyReplanningAuditRepository(database_url)
+    Base.metadata.create_all(repository.engine)
+    now = datetime.now(UTC)
+    with repository.session_factory() as session:
+        session.add(TripModel(
+            id="trip-hydrate", owner_id="owner", status="ACTIVE",
+            origin_address="A", origin_lat=21.0, origin_lng=105.0,
+            origin_source_type="MANUAL", destination_address="B",
+            destination_lat=20.0, destination_lng=106.0,
+            destination_source_type="MANUAL", initial_soc_percent=80,
+            soc_source_type="MANUAL", vehicle_profile_id="vehicle",
+            preference="balanced", assumptions_json={}, created_at=now,
+            updated_at=now, confirmed_plan_version=1,
+        ))
+        for version in (2, 3):
+            context = TripContextSnapshot(
+                trip_id="trip-hydrate", context_version=version,
+                current_confirmed_plan_version=1,
+                pending_plan_version=version,
+                telemetry_snapshot_id=f"telemetry-{version}",
+                current_lat=21, current_lng=105,
+                current_soc_percent=65 - version,
+                destination_lat=20, destination_lng=106,
+                vehicle_profile_version="vehicle-v1", policy_version="policy-v1",
+                assumption_snapshot_id=f"assumption-{version}",
+                unresolved_constraints=ActiveConstraintContext(), created_at=now,
+            )
+            session.add(_replanning_models.TripContextSnapshotModel(
+                id=f"context-{version}", trip_id=context.trip_id,
+                context_version=context.context_version,
+                telemetry_snapshot_id=context.telemetry_snapshot_id,
+                confirmed_plan_version=context.current_confirmed_plan_version,
+                pending_plan_version=context.pending_plan_version,
+                snapshot_json=context.model_dump(mode="json"), created_at=context.created_at,
+            ))
+        session.commit()
+
+    context = repository.get_latest_context("trip-hydrate")
+
+    assert context is not None
+    assert context.context_version == 3
+    assert context.telemetry_snapshot_id == "telemetry-3"
+
+    with repository.session_factory() as session:
+        row = session.get(_replanning_models.TripContextSnapshotModel, "context-3")
+        row.snapshot_json = {**row.snapshot_json, "context_version": 2}
+        session.commit()
+
+    with pytest.raises(ValueError, match="identity does not match"):
+        repository.get_latest_context("trip-hydrate")
 
 
 def test_save_run_respects_parent_foreign_keys(tmp_path) -> None:

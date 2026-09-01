@@ -349,6 +349,7 @@ def test_infeasible_long_route_does_not_recommend_impossible_full_charge() -> No
     assert "Không thể đi thẳng" in outcome.suggestions[0]
     assert outcome.search_scope == "ADAPTIVE_CORRIDOR_5_10_20_KM"
     assert outcome.direct_route_distance_km is not None
+    assert outcome.estimated_energy_required_kwh is not None
     assert outcome.estimated_reachable_distance_km is not None
     assert outcome.estimated_reachable_distance_km < outcome.direct_route_distance_km
     assert outcome.available_energy_before_reserve_kwh is not None

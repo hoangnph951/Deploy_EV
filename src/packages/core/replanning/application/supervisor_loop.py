@@ -66,15 +66,28 @@ class SupervisorLoop:
             public_summary=assessment.public_summary,
         ))
         pending = required_diagnostics(event_types)
-        next_tool = self._validated_tool(initial_decision.tool_name, pending)
-        if pending and next_tool is None:
+        if context.unresolved_constraints.telemetry_blocked or telemetry.freshness == "STALE":
+            blocked_summary = (
+                "D\u1eef li\u1ec7u m\u00f4 ph\u1ecfng \u0111\u00e3 c\u0169; c\u1ea7n snapshot m\u1edbi "
+                "tr\u01b0\u1edbc khi l\u1eadp l\u1ea1i h\u00e0nh tr\u00ecnh."
+            )
+            self._record(result, DecisionTraceItem(
+                sequence=len(result.decision_trace) + 1,
+                stage="ASSESSING", summary_code="SIMULATION_TELEMETRY_BLOCKED",
+                status="BLOCKED", reason_codes=["TELEMETRY_BLOCKED"],
+                missing_evidence=["FRESH_GPS", "FRESH_SOC"],
+                public_summary=blocked_summary,
+            ))
             self._block(
                 result,
-                reason_code="AI_TOOL_SELECTION_INVALID",
-                missing_evidence=["VALID_TOOL_SELECTION"],
-                summary="Trợ lý chưa chọn được công cụ hợp lệ trong phạm vi cho phép.",
+                reason_code="TELEMETRY_BLOCKED",
+                missing_evidence=["FRESH_GPS", "FRESH_SOC"],
+                summary=blocked_summary,
             )
             return result
+        next_tool = self._validated_tool(initial_decision.tool_name, pending)
+        if next_tool is None and pending:
+            next_tool = pending[0]
         while pending:
             name = next_tool
             pending.remove(name)
@@ -169,27 +182,13 @@ class SupervisorLoop:
                         response_source=continuation_reflection.response_source,
                         public_summary=continuation_reflection.public_summary,
                     ))
-                    if continuation_reflection.next_step != "PROPOSE_ACTION":
-                        self._block(
-                            result,
-                            reason_code="AI_STATION_IMPACT_DECISION_INVALID",
-                            missing_evidence=[],
-                            summary=continuation_reflection.public_summary,
-                        )
-                        return result
                     result.reflection = continuation_reflection
                     result.continue_current_plan = True
                     return result
             if pending:
                 next_tool = self._validated_tool(reflection.next_tool, pending)
-                if reflection.next_step != "CALL_TOOL" or next_tool is None:
-                    self._block(
-                        result,
-                        reason_code="AI_TOOL_SELECTION_INVALID",
-                        missing_evidence=reflection.missing_evidence or ["VALID_TOOL_SELECTION"],
-                        summary=reflection.public_summary,
-                    )
-                    return result
+                if next_tool is None:
+                    next_tool = pending[0]
 
         if len(result.observations) >= self._max_tools:
             self._block(
@@ -230,18 +229,6 @@ class SupervisorLoop:
             response_source=strategy_reflection.response_source,
             public_summary=strategy_reflection.public_summary,
         ))
-        if (
-            strategy_reflection.next_step != "CALL_TOOL"
-            or strategy_reflection.next_tool != build_tool
-        ):
-            self._block(
-                result,
-                reason_code="AI_REPLAN_STRATEGY_INVALID",
-                missing_evidence=strategy_reflection.missing_evidence or ["VALID_REPLAN_STRATEGY"],
-                summary=strategy_reflection.public_summary,
-            )
-            return result
-
         result.candidate = self._build_candidate(
             strategy=(
                 "MINIMAL_SUBSTITUTION"
@@ -276,17 +263,6 @@ class SupervisorLoop:
                 response_source=fallback_reflection.response_source,
                 public_summary=fallback_reflection.public_summary,
             ))
-            if (
-                fallback_reflection.next_step != "CALL_TOOL"
-                or fallback_reflection.next_tool != "build_full_replan"
-            ):
-                self._block(
-                    result,
-                    reason_code="AI_FULL_REPLAN_FALLBACK_INVALID",
-                    missing_evidence=["FULL_REPLAN_STRATEGY"],
-                    summary=fallback_reflection.public_summary,
-                )
-                return result
             result.candidate = self._build_candidate(
                 strategy="FULL_REPLAN",
                 context=context,
@@ -314,17 +290,6 @@ class SupervisorLoop:
             response_source=candidate_reflection.response_source,
             public_summary=candidate_reflection.public_summary,
         ))
-        if (
-            candidate_reflection.next_step != "CALL_TOOL"
-            or candidate_reflection.next_tool != "compare_plans"
-        ):
-            self._block(
-                result,
-                reason_code="AI_TOOL_SELECTION_INVALID",
-                missing_evidence=candidate_reflection.missing_evidence or ["PLAN_COMPARISON"],
-                summary=candidate_reflection.public_summary,
-            )
-            return result
         comparison = DiagnosticObservation(
             tool="compare_plans", status="SUCCEEDED", provider="F4_PLAN_DIFF_ENGINE",
             freshness="NOT_APPLICABLE",
