@@ -1223,6 +1223,9 @@ body {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--dashboard-blue-dark);
   font-size: 1.45rem;
   font-weight: 800;
@@ -1705,7 +1708,7 @@ body {
   .trip-history-card > header { display: grid; }
   .history-station-soc { grid-template-columns: repeat(2, 1fr); }
 }
-.brand img { display: block; width: 156px; height: 76px; object-fit: contain; object-position: center; mix-blend-mode: multiply; }
+.brand img { display: block; width: 64px; height: 56px; object-fit: contain; object-position: center; mix-blend-mode: multiply; }
 
 .trust-list { display: grid; gap: 3px; }
 .trust-list > div { display: grid; grid-template-columns: 8px 1fr auto auto; align-items: center; gap: 7px; padding: 7px 0; border-bottom: 1px solid #edf1f6; font-size: 0.68rem; }
@@ -1827,7 +1830,7 @@ body {
 @media (max-width: 620px) {
   .app-topbar { min-height: 56px; padding: 0 14px; }
   .brand { font-size: 1.15rem; }
-  .brand img { width: 132px; height: 64px; }
+  .brand img { width: 54px; height: 48px; }
   .journey-panel,
   .proposal-card { padding: 18px 14px; }
   .goong-route-map { height: 440px; }

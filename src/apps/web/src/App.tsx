@@ -683,7 +683,10 @@ export default function App() {
   return (
     <main className="ev-dashboard">
       <header className="app-topbar">
-        <a className="brand" href="#top" aria-label="EV Route - Lập kế hoạch"><span>EV</span> ROUTE</a>
+        <a className="brand" href="#top" aria-label="EV Route - Lập kế hoạch">
+          <img src="/logo.png" alt="" aria-hidden="true" />
+          <span>EV</span> ROUTE
+        </a>
         <nav aria-label="Điều hướng chính">
           <button type="button" className={`nav-item ${activeTab === "planning" ? "nav-item--active" : ""}`} onClick={() => setActiveTab("planning")}>▣ <strong>Lập kế hoạch</strong></button>
           <button type="button" className={`nav-item ${activeTab === "tracking" ? "nav-item--active" : ""}`} disabled={!planProposal || confirmedPlanId !== planProposal.plan_id} title={confirmedPlanId !== planProposal?.plan_id ? "Hãy xác nhận hành trình trước" : "Theo dõi hành trình"} onClick={() => setActiveTab("tracking")}>▢ <strong>Theo dõi</strong>{confirmedPlanId === planProposal?.plan_id ? <span className="nav-ready-dot" /> : null}</button>
